@@ -1,0 +1,11 @@
+# ROS
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
