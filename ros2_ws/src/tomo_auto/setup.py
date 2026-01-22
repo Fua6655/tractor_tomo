@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'tomo_factory_safety'
+package_name = 'tomo_auto'
 
 setup(
     name=package_name,

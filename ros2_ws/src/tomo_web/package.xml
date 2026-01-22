@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tomo_web</name>
+  <version>0.0.1</version>
+  <description>TOMO Web UI + ROS bridge</description>
+
+  <maintainer email="luka@todo.todo">luka</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tomo_msgs</exec_depend>
+
+  <!-- Web -->
+  <exec_depend>fastapi</exec_depend>
+  <exec_depend>uvicorn</exec_depend>
+  <exec_depend>starlette</exec_depend>
+
+</package>

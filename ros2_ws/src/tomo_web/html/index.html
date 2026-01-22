@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TOMO Control Panel</title>
+  <link rel="stylesheet" href="/html/css/style.css" />
+</head>
+
+<body>
+
+<h1>🚜 TOMO – Live Status</h1>
+
+<h2>SOURCE</h2>
+<div class="row" id="source"></div>
+
+<h2>SAFETY</h2>
+<div class="row" id="safety"></div>
+
+<!-- WEB PAGE -->
+<div id="page-web">
+  <h2>STATES</h2>
+  <div class="row" id="states"></div>
+
+  <h2>EVENTS</h2>
+  <div class="row" id="events"></div>
+
+  <h2>LIGHTS</h2>
+  <div class="row" id="lights"></div>
+</div>
+
+<!-- AUTO PAGE -->
+<div id="page-auto" style="display:none">
+  <h2>AUTO MODE</h2>
+  <p>Autonomous control active</p>
+</div>
+
+<script type="module" src="/html/js/ws.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>tomo_ps4</name>
+  <version>0.0.1</version>
+  <description>PS4 input → ControlEvents</description>
+
+  <maintainer email="luka@example.com">luka</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tomo_msgs</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
