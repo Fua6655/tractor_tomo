@@ -2,7 +2,7 @@
 import asyncio
 import socket
 import threading
-import os
+from importlib.resources import files
 
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
@@ -97,8 +97,7 @@ class WebRosBridge(Node):
 app = FastAPI()
 ros_node: WebRosBridge | None = None
 
-pkg_share = get_package_share_directory('tomo_web')
-html_dir = os.path.join(pkg_share, 'html')
+html_dir = files("tomo_web") / "html"
 
 app.mount("/", StaticFiles(directory=html_dir, html=True), name="html")
 

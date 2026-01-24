@@ -6,6 +6,7 @@ from typing import List
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Twist
 
 from tomo_msgs.msg import ControlEvents, Emergency
 
@@ -22,17 +23,19 @@ class PS4Node(Node):
         super().__init__("ps4_node")
 
         # ---------------- PARAMETERS ----------------
-        self.declare_parameter("joy_topic", "/joy")
-        self.declare_parameter("arm_hold_time", 3.0)
+        self.declare_parameter("arm_hold_time", 2.0)
         self.declare_parameter("deadzone", 0.08)
         self.declare_parameter("linear_scale", 0.6)
         self.declare_parameter("angular_scale", 1.2)
+        self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
+        self.declare_parameter('joy_topic', '/joy')
 
-        self.joy_topic = self.get_parameter("joy_topic").value
         self.arm_hold_time = self.get_parameter("arm_hold_time").value
         self.deadzone = self.get_parameter("deadzone").value
         self.linear_scale = self.get_parameter("linear_scale").value
         self.angular_scale = self.get_parameter("angular_scale").value
+        self.cmd_topic = str(self.get_parameter('cmd_topic').value)
+        self.joy_topic = str(self.get_parameter('joy_topic').value)
 
         # ---------------- CONTROLLER ----------------
         self.ps4 = PS4Controller()
@@ -43,24 +46,11 @@ class PS4Node(Node):
         self._prev = {}
 
         # ---------------- PUB / SUB ----------------
-        self.pub_event = self.create_publisher(
-            ControlEvents,
-            "control/event",
-            50
-        )
+        self.pub_event = self.create_publisher(ControlEvents,"control/event",50)
+        self.pub_emergency = self.create_publisher(Emergency,"control/emergency",10)
+        self.cmd_pub = self.create_publisher(Twist, self.cmd_topic, 10)
 
-        self.pub_emergency = self.create_publisher(
-            Emergency,
-            "control/emergency",
-            10
-        )
-
-        self.create_subscription(
-            Joy,
-            self.joy_topic,
-            self.joy_cb,
-            50
-        )
+        self.create_subscription(Joy,self.joy_topic,self.joy_cb,50)
 
         self.get_logger().info("🎮 PS4 node READY")
 
@@ -73,16 +63,12 @@ class PS4Node(Node):
         category: int,
         type_: int,
         value: int = 0,
-        linear: float = 0.0,
-        angular: float = 0.0,
     ):
         msg = ControlEvents()
         msg.source = ControlEvents.SOURCE_PS4
         msg.category = category
         msg.type = type_
         msg.value = value
-        msg.linear = linear
-        msg.angular = angular
         msg.stamp = self.get_clock().now().to_msg()
         self.pub_event.publish(msg)
 
@@ -112,7 +98,7 @@ class PS4Node(Node):
         if self.ps4.joystick_lost:
             em = Emergency()
             em.active = True
-            em.level = 1
+            em.level = Emergency.LEVEL_HARD
             em.reason = "ps4_timeout"
             em.stamp = self.get_clock().now().to_msg()
             self.pub_emergency.publish(em)
@@ -133,7 +119,7 @@ class PS4Node(Node):
         ):
             self.armed = not self.armed
             self.send_event(
-                ControlEvents.CAT_STATE,
+                ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_ARMED,
                 int(self.armed),
             )
@@ -150,7 +136,7 @@ class PS4Node(Node):
         # --------------------------------------------------
         if self.edge("O", bool(self.ps4.O_btn)) and self.armed:
             self.send_event(
-                ControlEvents.CAT_STATE,
+                ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_POWER,
                 1,
             )
@@ -160,7 +146,7 @@ class PS4Node(Node):
         # --------------------------------------------------
         if self.edge("SQUARE", bool(self.ps4.Square_btn)) and self.armed:
             self.send_event(
-                ControlEvents.CAT_STATE,
+                ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_LIGHT,
                 1,
             )
@@ -169,19 +155,31 @@ class PS4Node(Node):
         # EVENTS
         # --------------------------------------------------
         self.send_event(
-            ControlEvents.CAT_EVENT,
+            ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_START,
             int(self.ps4.Triangle_btn and self.armed),
         )
 
         self.send_event(
-            ControlEvents.CAT_EVENT,
+            ControlEvents.CATEGORY_EVENT,
+            ControlEvents.ENGINE_STOP,
+            int(self.ps4.R1_btn and self.armed),
+        )
+
+        self.send_event(
+            ControlEvents.CATEGORY_EVENT,
             ControlEvents.CLUTCH_ACTIVE,
             int(self.ps4.R1_btn and self.armed),
         )
 
         self.send_event(
-            ControlEvents.CAT_EVENT,
+            ControlEvents.CATEGORY_EVENT,
+            ControlEvents.BRAKE_ACTIVE,
+            int(self.ps4.R1_btn and self.armed),
+        )
+
+        self.send_event(
+            ControlEvents.CATEGORY_EVENT,
             ControlEvents.MOVE_ALLOWED,
             int(self.ps4.L1_btn and self.armed),
         )
@@ -191,28 +189,28 @@ class PS4Node(Node):
         # --------------------------------------------------
         if self.edge("UP", bool(self.ps4.up_btn)):
             self.send_event(
-                ControlEvents.CAT_LIGHT,
+                ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.FRONT_SHORT,
                 1,
             )
 
         if self.edge("DOWN", bool(self.ps4.down_btn)):
             self.send_event(
-                ControlEvents.CAT_LIGHT,
+                ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.BACK_POSITION,
                 1,
             )
 
         if self.edge("LEFT", bool(self.ps4.left_btn)):
             self.send_event(
-                ControlEvents.CAT_LIGHT,
+                ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.LEFT_BLINK,
                 1,
             )
 
         if self.edge("RIGHT", bool(self.ps4.right_btn)):
             self.send_event(
-                ControlEvents.CAT_LIGHT,
+                ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.RIGHT_BLINK,
                 1,
             )
@@ -223,13 +221,10 @@ class PS4Node(Node):
         lin = self.apply_deadzone(self.ps4.joy_left_y) * self.linear_scale
         ang = self.apply_deadzone(self.ps4.joy_right_x) * self.angular_scale
 
-        self.send_event(
-            ControlEvents.CAT_MOTION,
-            0,
-            0,
-            linear=lin if self.armed else 0.0,
-            angular=ang if self.armed else 0.0,
-        )
+        twist = Twist()
+        twist.linear.x = lin
+        twist.angular.z = ang
+        self.cmd_pub.publish(twist)
 
 
 def main():

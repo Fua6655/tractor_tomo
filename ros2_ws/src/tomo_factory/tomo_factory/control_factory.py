@@ -4,7 +4,6 @@ import rclpy
 from rclpy.node import Node
 
 from tomo_msgs.msg import ControlEvents, OutputStates, Emergency
-from builtin_interfaces.msg import Time
 
 
 class ControlFactory(Node):
@@ -23,10 +22,9 @@ class ControlFactory(Node):
         super().__init__("control_factory")
 
         # ==================================================
-        # INTERNAL STATE (REDUCER STATE)
+        # REDUCER STATE (SINGLE SOURCE OF TRUTH)
         # ==================================================
         self.state = {
-            # system
             "active_source": "PS4",
             "emergency": False,
 
@@ -54,10 +52,21 @@ class ControlFactory(Node):
             "angular": 0.0,
         }
 
-        # emergency handling
+        # ==================================================
+        # EMERGENCY
+        # ==================================================
         self.emergency_active = False
-        self.emergency_level = 0      # 0 = soft, 1 = hard
-        self.saved_state = None       # used only for SOFT emergency
+        self.emergency_level = 0   # 0 = soft, 1 = hard
+        self.saved_state = None
+
+        # ==================================================
+        # BLINKER INTERNAL STATE
+        # ==================================================
+        self.blink_left_active = False
+        self.blink_right_active = False
+        self.blink_phase = False
+
+        self.create_timer(0.5, self._blink_timer)
 
         # ==================================================
         # ROS INTERFACES
@@ -89,11 +98,8 @@ class ControlFactory(Node):
     # ==================================================
 
     def emergency_cb(self, msg: Emergency):
-        """
-        Handles SOFT vs HARD emergency.
-        """
 
-        # ---------------- HARD EMERGENCY ----------------
+        # -------- HARD EMERGENCY --------
         if msg.active and msg.level == 1:
             self.get_logger().error("🚨 HARD EMERGENCY")
 
@@ -106,7 +112,7 @@ class ControlFactory(Node):
             self.publish()
             return
 
-        # ---------------- SOFT EMERGENCY ----------------
+        # -------- SOFT EMERGENCY --------
         if msg.active and msg.level == 0:
             self.get_logger().warn("⚠️ SOFT EMERGENCY")
 
@@ -120,7 +126,7 @@ class ControlFactory(Node):
             self.publish()
             return
 
-        # ---------------- RELEASE ----------------
+        # -------- RELEASE --------
         if not msg.active and self.emergency_active:
             self.get_logger().info("✅ Emergency released")
 
@@ -134,19 +140,16 @@ class ControlFactory(Node):
             self.publish()
 
     # ==================================================
-    # EVENT REDUCER
+    # EVENT CALLBACK (REDUCER ENTRY)
     # ==================================================
 
     def event_cb(self, msg: ControlEvents):
-        """
-        Main reducer logic.
-        """
 
-        # ---------- HARD emergency blocks EVERYTHING ----------
+        # HARD emergency blocks everything
         if self.emergency_active and self.emergency_level == 1:
             return
 
-        # ---------- SOFT emergency blocks dangerous stuff ----------
+        # SOFT emergency blocks dangerous stuff
         if self.emergency_active and self.emergency_level == 0:
             if msg.category in (
                 ControlEvents.CAT_EVENT,
@@ -154,19 +157,17 @@ class ControlFactory(Node):
             ):
                 return
 
-        # ---------- SOURCE GUARD ----------
+        # SOURCE GUARD
         src = self._source_to_string(msg.source)
         if src != self.state["active_source"]:
-            # only SYSTEM events may change source
             if msg.category != ControlEvents.CAT_SYSTEM:
                 return
 
-        # ---------- REDUCE ----------
         self.reduce(msg)
         self.publish()
 
     # ==================================================
-    # REDUCER IMPLEMENTATION
+    # REDUCER
     # ==================================================
 
     def reduce(self, msg: ControlEvents):
@@ -191,17 +192,28 @@ class ControlFactory(Node):
 
         # ---------- LIGHTS ----------
         elif msg.category == ControlEvents.CAT_LIGHT:
-            mapping = {
-                ControlEvents.FRONT_POSITION: "front_position",
-                ControlEvents.FRONT_SHORT: "front_short",
-                ControlEvents.FRONT_LONG: "front_long",
-                ControlEvents.BACK_POSITION: "back_light",
-                ControlEvents.LEFT_BLINK: "left_blink",
-                ControlEvents.RIGHT_BLINK: "right_blink",
-            }
-            key = mapping.get(msg.type)
-            if key:
-                self.state[key] = bool(msg.value)
+
+            if msg.type == ControlEvents.LEFT_BLINK:
+                self.blink_left_active = not self.blink_left_active
+                if not self.blink_left_active:
+                    self.state["left_blink"] = False
+
+            elif msg.type == ControlEvents.RIGHT_BLINK:
+                self.blink_right_active = not self.blink_right_active
+                if not self.blink_right_active:
+                    self.state["right_blink"] = False
+
+            elif msg.type == ControlEvents.FRONT_POSITION:
+                self.state["front_position"] = not self.state["front_position"]
+
+            elif msg.type == ControlEvents.FRONT_SHORT:
+                self.state["front_short"] = not self.state["front_short"]
+
+            elif msg.type == ControlEvents.FRONT_LONG:
+                self.state["front_long"] = not self.state["front_long"]
+
+            elif msg.type == ControlEvents.BACK_POSITION:
+                self.state["back_light"] = not self.state["back_light"]
 
         # ---------- MOTION ----------
         elif msg.category == ControlEvents.CAT_MOTION:
@@ -216,7 +228,26 @@ class ControlFactory(Node):
                 self._hard_zero()
 
     # ==================================================
-    # ZEROING HELPERS
+    # BLINK TIMER
+    # ==================================================
+
+    def _blink_timer(self):
+        if not (self.blink_left_active or self.blink_right_active):
+            return
+
+        self.blink_phase = not self.blink_phase
+
+        self.state["left_blink"] = (
+            self.blink_left_active and self.blink_phase
+        )
+        self.state["right_blink"] = (
+            self.blink_right_active and self.blink_phase
+        )
+
+        self.publish()
+
+    # ==================================================
+    # ZEROING
     # ==================================================
 
     def _soft_zero(self):
@@ -227,14 +258,18 @@ class ControlFactory(Node):
         self.state["angular"] = 0.0
 
     def _hard_zero(self):
-        for k in self.state:
-            if isinstance(self.state[k], bool):
+        for k, v in self.state.items():
+            if isinstance(v, bool):
                 self.state[k] = False
-            elif isinstance(self.state[k], float):
+            elif isinstance(v, float):
                 self.state[k] = 0.0
 
+        self.blink_left_active = False
+        self.blink_right_active = False
+        self.blink_phase = False
+
     # ==================================================
-    # PUBLISH OUTPUT
+    # PUBLISH
     # ==================================================
 
     def publish(self):
