@@ -33,7 +33,7 @@ const int THROTTLE_PIN       = 10;
 const int FRONT_POSITION_PIN = 2;
 const int FRONT_SHORT_PIN    = 4;
 const int FRONT_LONG_PIN     = 3;
-const int BACK_PIN           = 5;
+const int BACK_POSITION_PIN  = 5;
 const int LEFT_BLINK_PIN     = 6;
 const int RIGHT_BLINK_PIN    = 7;
 
@@ -41,8 +41,10 @@ const int RIGHT_BLINK_PIN    = 7;
 // ================= STATE TRACKING ====================
 // =====================================================
 bool armedPrev=false, powerPrev=false, lightPrev=false;
-bool enginePrev=false, clutchPrev=false, speedPrev=false, movePrev=false;
-bool fpPrev=false, fsPrev=false, flPrev=false, backPrev=false, lbPrev=false, rbPrev=false;
+bool engineStartPrev=false, engineStopPrev=false;
+bool clutchPrev=false, brakePrev=false, movePrev=false;
+bool fpPrev=false, fsPrev=false, flPrev=false;
+bool bpPrev=false, lbPrev=false, rbPrev=false;
 
 // =====================================================
 // ================= BUFFER ============================
@@ -56,13 +58,15 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
+  Serial.println("\n=== ESP32 BOOT ===");
+
   pinMode(ENGINE_START_PIN, OUTPUT);
   pinMode(CLUTCH_PIN, OUTPUT);
   pinMode(THROTTLE_PIN, OUTPUT);
   pinMode(FRONT_POSITION_PIN, OUTPUT);
   pinMode(FRONT_SHORT_PIN, OUTPUT);
   pinMode(FRONT_LONG_PIN, OUTPUT);
-  pinMode(BACK_PIN, OUTPUT);
+  pinMode(BACK_POSITION_PIN, OUTPUT);
   pinMode(LEFT_BLINK_PIN, OUTPUT);
   pinMode(RIGHT_BLINK_PIN, OUTPUT);
 
@@ -126,40 +130,50 @@ void handleUDP() {
 // =====================================================
 void processOUT(const String& out) {
 
-  int a,p,l,e,c,s,m,fp,fs,fl,b,lb,rb;
-  float lin, ang;
+  int armed, power, light;
+  int eng_start, eng_stop, clutch, brake, move;
+  int fp, fs, fl, bp, lb, rb;
 
-  sscanf(out.c_str(),
-    "OUT,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%f,%f",
-    &a,&p,&l,&e,&c,&s,&m,
-    &fp,&fs,&fl,&b,&lb,&rb,
-    &lin,&ang
+  int parsed = sscanf(
+    out.c_str(),
+    "OUT,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+    &armed,&power,&light,
+    &eng_start,&eng_stop,&clutch,&brake,&move,
+    &fp,&fs,&fl,&bp,&lb,&rb
   );
 
-  edge("ARMED", a, armedPrev);
-  edge("POWER", p, powerPrev);
-  edge("LIGHT", l, lightPrev);
+  if (parsed != 14) {
+    sendLog("OUT parse failed");
+    return;
+  }
 
-  edge("ENGINE", e, enginePrev);
-  edge("CLUTCH", c, clutchPrev);
-  edge("SPEED", s, speedPrev);
-  edge("MOVE", m, movePrev);
+  // ---------- EDGE LOGGING ----------
+  logEdge("ARMED", armed, armedPrev);
+  logEdge("POWER", power, powerPrev);
+  logEdge("LIGHT", light, lightPrev);
 
-  edge("FP", fp, fpPrev);
-  edge("FS", fs, fsPrev);
-  edge("FL", fl, flPrev);
-  edge("BACK", b, backPrev);
-  edge("LB", lb, lbPrev);
-  edge("RB", rb, rbPrev);
+  logEdge("ENGINE_START", eng_start, engineStartPrev);
+  logEdge("ENGINE_STOP", eng_stop, engineStopPrev);
+  logEdge("CLUTCH", clutch, clutchPrev);
+  logEdge("BRAKE", brake, brakePrev);
+  logEdge("MOVE", move, movePrev);
 
-  digitalWrite(ENGINE_START_PIN, e);
-  digitalWrite(CLUTCH_PIN, c);
-  digitalWrite(THROTTLE_PIN, s);
+  logEdge("FP", fp, fpPrev);
+  logEdge("FS", fs, fsPrev);
+  logEdge("FL", fl, flPrev);
+  logEdge("BP", bp, bpPrev);
+  logEdge("LB", lb, lbPrev);
+  logEdge("RB", rb, rbPrev);
+
+  // ---------- DIGITAL OUTPUTS ----------
+  digitalWrite(ENGINE_START_PIN, eng_start);
+  digitalWrite(CLUTCH_PIN, clutch);
+  digitalWrite(THROTTLE_PIN, brake);
 
   digitalWrite(FRONT_POSITION_PIN, fp);
   digitalWrite(FRONT_SHORT_PIN, fs);
   digitalWrite(FRONT_LONG_PIN, fl);
-  digitalWrite(BACK_PIN, b);
+  digitalWrite(BACK_POSITION_PIN, bp);
   digitalWrite(LEFT_BLINK_PIN, lb);
   digitalWrite(RIGHT_BLINK_PIN, rb);
 }
@@ -181,19 +195,13 @@ void clearFailsafe() {
     failsafeActive = false;
     sendState("FAILSAFE", "0");
     sendLog("FAILSAFE OFF");
+    publishAllStates();
   }
 }
 
 // =====================================================
-// ================= HELPERS ===========================
+// ================= WEB TX HELPERS ====================
 // =====================================================
-void edge(const char* name, bool now, bool &prev) {
-  if (now != prev) {
-    prev = now;
-    sendState(name, now ? "1" : "0");
-  }
-}
-
 void sendRaw(const String& msg) {
   if (!WEB_IP) return;
   udp.beginPacket(WEB_IP, WEB_PORT);
@@ -209,6 +217,35 @@ void sendState(const String& name, const String& value) {
   sendRaw("STATE," + name + "," + value);
 }
 
+void logEdge(const char* name, bool now, bool &prev) {
+  if (now != prev) {
+    prev = now;
+    sendState(name, now ? "1" : "0");
+  }
+}
+
+void publishAllStates() {
+  sendState("ARMED", armedPrev ? "1" : "0");
+  sendState("POWER", powerPrev ? "1" : "0");
+  sendState("LIGHT", lightPrev ? "1" : "0");
+
+  sendState("ENGINE_START", engineStartPrev ? "1" : "0");
+  sendState("ENGINE_STOP", engineStopPrev ? "1" : "0");
+  sendState("CLUTCH", clutchPrev ? "1" : "0");
+  sendState("BRAKE", brakePrev ? "1" : "0");
+  sendState("MOVE", movePrev ? "1" : "0");
+
+  sendState("FP", fpPrev ? "1" : "0");
+  sendState("FS", fsPrev ? "1" : "0");
+  sendState("FL", flPrev ? "1" : "0");
+  sendState("BP", bpPrev ? "1" : "0");
+  sendState("LB", lbPrev ? "1" : "0");
+  sendState("RB", rbPrev ? "1" : "0");
+}
+
+// =====================================================
+// ================= UTIL ==============================
+// =====================================================
 void allOutputsLow() {
   digitalWrite(ENGINE_START_PIN, LOW);
   digitalWrite(CLUTCH_PIN, LOW);
@@ -216,7 +253,7 @@ void allOutputsLow() {
   digitalWrite(FRONT_POSITION_PIN, LOW);
   digitalWrite(FRONT_SHORT_PIN, LOW);
   digitalWrite(FRONT_LONG_PIN, LOW);
-  digitalWrite(BACK_PIN, LOW);
+  digitalWrite(BACK_POSITION_PIN, LOW);
   digitalWrite(LEFT_BLINK_PIN, LOW);
   digitalWrite(RIGHT_BLINK_PIN, LOW);
 }

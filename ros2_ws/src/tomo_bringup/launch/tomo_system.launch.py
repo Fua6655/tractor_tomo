@@ -19,7 +19,7 @@ def generate_launch_description():
         # ================= ARGUMENTS =================
         DeclareLaunchArgument(
             "esp_ip",
-            default_value="192.168.0.116",
+            default_value="192.168.0.187",
             description="ESP32 IP address"
         ),
 
@@ -55,30 +55,32 @@ def generate_launch_description():
             name="tomo_ps4",
             output="screen",
             parameters=[{
-                "joy_topic": "/joy",
-                "control_event_topic": "/control/event",
                 "linear_axis": 1,
                 "angular_axis": 0,
-                "deadzone": 0.08,
-                "linear_scale_low": 0.4,
-                "linear_scale_high": 1.0,
-                "angular_scale_low": 1.0,
-                "angular_scale_high": 2.0,
                 "arm_hold_time": 2.0,
-                "power_hold_time": 1.0,
-                "light_hold_time": 1.0,
+                "deadzone": 0.08,
+                "linear_scale": 0.4,
+                "angular_scale": 1.0,
+                "joy_topic": "/joy",
+                "control_event_topic": "/control/events",
+                "control_emergency_topic": "/control/emergency",
+                "cmd_topic": "/ps4/cmd_vel",
+
+
+
             }]
         ),
 
         # ================= WEB → ControlEvents =================
         Node(
             package="tomo_web",
-            executable="web_node",
+            executable="web_server",
             name="tomo_web",
             output="screen",
             parameters=[{
-                "control_event_topic": "/control/event",
-                "emergency_topic": "/control/emergency"
+                "control_event_topic": "/control/events",
+                "emergency_topic": "/control/emergency",
+                "output_topic": "/tomo/states",
             }]
         ),
 
@@ -89,9 +91,12 @@ def generate_launch_description():
             name="tomo_factory",
             output="screen",
             parameters=[{
-                "control_event_topic": "/control/event",
+                "control_event_topic": "/control/events",
                 "emergency_topic": "/control/emergency",
-                "output_topic": "/tomo/output",
+                "ps4_cmd_vel_topic": "/ps4/cmd_vel",
+                "auto_cmd_vel_topic": "/auto/cmd_vel",
+                "output_topic": "/tomo/states",
+                "output_cmd_topic": "/tomo/cmd_vel",
                 "ps4_timeout": 0.5,
                 "web_timeout": 1.0,
                 "auto_timeout": 0.5,
@@ -105,7 +110,7 @@ def generate_launch_description():
             name="tomo_esp",
             output="screen",
             parameters=[{
-                "output_topic": "/tomo/output",
+                "output_topic": "/tomo/states",
                 "esp_ip": esp_ip,
                 "esp_port": esp_port,
                 "heartbeat_hz": 5.0,

@@ -7,9 +7,9 @@ string active_source    # "PS4", "WEB", "AUTO"
 
 # ---- SYSTEM STATE ----
 bool emergency
-bool armed
-bool power_mode
-bool light_mode
+bool armed_state
+bool power_state
+bool light_state
 
 # ---- EVENTS ----
 bool engine_start

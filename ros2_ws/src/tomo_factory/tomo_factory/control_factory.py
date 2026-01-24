@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 
 from tomo_msgs.msg import ControlEvents, OutputStates, Emergency
+from geometry_msgs.msg import Twist
 
 
 class ControlFactory(Node):
@@ -21,6 +22,28 @@ class ControlFactory(Node):
     def __init__(self):
         super().__init__("control_factory")
 
+        # ---------------- PARAMETERS ----------------
+        self.declare_parameter('control_event_topic', '/control/events')
+        self.declare_parameter('control_emergency_topic', '/control/emergency')
+        self.declare_parameter('ps4_cmd_topic', '/ps4/cmd_vel')
+        self.declare_parameter('auto_cmd_topic', '/auto/cmd_vel')
+        self.declare_parameter('output_topic', '/tomo/states')
+        self.declare_parameter('output_cmd_topic', 'tomo/cmd_vel')
+        self.declare_parameter('ps4_timeout', 0.5)
+        self.declare_parameter('web_timeout', 1.0)
+        self.declare_parameter('auto_timeout', 0.5)
+
+
+        self.control_event_topic = self.get_parameter("control_event_topic").value
+        self.control_emergency_topic = self.get_parameter("control_emergency_topic").value
+        self.ps4_cmd_topic = self.get_parameter("ps4_cmd_topic").value
+        self.auto_cmd_topic = self.get_parameter("auto_cmd_topic").value
+        self.output_topic = str(self.get_parameter('output_topic').value)
+        self.output_cmd_topic = str(self.get_parameter('output_cmd_topic').value)
+        self.ps4_timeout = float(self.get_parameter('ps4_timeout').value)
+        self.web_timeout = float(self.get_parameter('web_timeout').value)
+        self.auto_timeout = float(self.get_parameter('auto_timeout').value)
+
         # ==================================================
         # REDUCER STATE (SINGLE SOURCE OF TRUTH)
         # ==================================================
@@ -29,27 +52,24 @@ class ControlFactory(Node):
             "emergency": False,
 
             # states
-            "armed": False,
-            "power_mode": False,
-            "light_mode": False,
+            "armed_state": False,
+            "power_state": False,
+            "light_state": False,
 
             # events
             "engine_start": False,
-            "clutch_down": False,
-            "high_speed": False,
+            "engine_stop": False,
+            "clutch_active": False,
+            "brake_active": False,
             "move_allowed": False,
 
             # lights
             "front_position": False,
             "front_short": False,
             "front_long": False,
-            "back_light": False,
+            "back_position": False,
             "left_blink": False,
             "right_blink": False,
-
-            # motion
-            "linear": 0.0,
-            "angular": 0.0,
         }
 
         # ==================================================
@@ -71,25 +91,11 @@ class ControlFactory(Node):
         # ==================================================
         # ROS INTERFACES
         # ==================================================
-        self.create_subscription(
-            ControlEvents,
-            "control/event",
-            self.event_cb,
-            50
-        )
+        self.create_subscription(ControlEvents,self.control_event_topic,self.event_cb,50)
+        self.create_subscription(Emergency,self.control_emergency_topic,self.emergency_cb,10)
 
-        self.create_subscription(
-            Emergency,
-            "control/emergency",
-            self.emergency_cb,
-            10
-        )
-
-        self.pub_output = self.create_publisher(
-            OutputStates,
-            "tomo/output",
-            10
-        )
+        self.pub_output = self.create_publisher(OutputStates,self.output_topic,10)
+        self.pub_output_cmd_vel = self.create_publisher(Twist, self.output_cmd_topic, 10)
 
         self.get_logger().info("✅ ControlFactory READY (event-based)")
 
@@ -152,15 +158,15 @@ class ControlFactory(Node):
         # SOFT emergency blocks dangerous stuff
         if self.emergency_active and self.emergency_level == 0:
             if msg.category in (
-                ControlEvents.CAT_EVENT,
-                ControlEvents.CAT_MOTION,
+                ControlEvents.CATEGORY_EVENT,
+                #ControlEvents.CATEGORY_MOTION,
             ):
                 return
 
         # SOURCE GUARD
         src = self._source_to_string(msg.source)
         if src != self.state["active_source"]:
-            if msg.category != ControlEvents.CAT_SYSTEM:
+            if msg.category != ControlEvents.CATEGORY_SYSTEM:
                 return
 
         self.reduce(msg)
@@ -173,25 +179,29 @@ class ControlFactory(Node):
     def reduce(self, msg: ControlEvents):
 
         # ---------- STATES ----------
-        if msg.category == ControlEvents.CAT_STATE:
+        if msg.category == ControlEvents.CATEGORY_STATE:
             if msg.type == ControlEvents.STATE_ARMED:
-                self.state["armed"] = bool(msg.value)
+                self.state["armed_state"] = bool(msg.value)
             elif msg.type == ControlEvents.STATE_POWER:
-                self.state["power_mode"] = bool(msg.value)
+                self.state["power_state"] = bool(msg.value)
             elif msg.type == ControlEvents.STATE_LIGHT:
-                self.state["light_mode"] = bool(msg.value)
+                self.state["light_state"] = bool(msg.value)
 
         # ---------- EVENTS ----------
-        elif msg.category == ControlEvents.CAT_EVENT:
+        elif msg.category == ControlEvents.CATEGORY_EVENT:
             if msg.type == ControlEvents.ENGINE_START:
                 self.state["engine_start"] = bool(msg.value)
+            elif msg.type == ControlEvents.ENGINE_STOP:
+                self.state["engine_stop"] = bool(msg.value)
             elif msg.type == ControlEvents.CLUTCH_ACTIVE:
-                self.state["clutch_down"] = bool(msg.value)
+                self.state["clutch_active"] = bool(msg.value)
+            elif msg.type == ControlEvents.BRAKE_ACTIVE:
+                self.state["brake_active"] = bool(msg.value)
             elif msg.type == ControlEvents.MOVE_ALLOWED:
                 self.state["move_allowed"] = bool(msg.value)
 
         # ---------- LIGHTS ----------
-        elif msg.category == ControlEvents.CAT_LIGHT:
+        elif msg.category == ControlEvents.CATEGORY_LIGHT:
 
             if msg.type == ControlEvents.LEFT_BLINK:
                 self.blink_left_active = not self.blink_left_active
@@ -213,15 +223,15 @@ class ControlFactory(Node):
                 self.state["front_long"] = not self.state["front_long"]
 
             elif msg.type == ControlEvents.BACK_POSITION:
-                self.state["back_light"] = not self.state["back_light"]
+                self.state["back_position"] = not self.state["back_position"]
 
         # ---------- MOTION ----------
-        elif msg.category == ControlEvents.CAT_MOTION:
-            self.state["linear"] = msg.linear
-            self.state["angular"] = msg.angular
+        #elif msg.category == ControlEvents.CATEGORY_MOTION:
+         #   self.state["linear"] = msg.linear
+          #  self.state["angular"] = msg.angular
 
         # ---------- SYSTEM ----------
-        elif msg.category == ControlEvents.CAT_SYSTEM:
+        elif msg.category == ControlEvents.CATEGORY_SYSTEM:
             if msg.type == ControlEvents.SYS_FORCE_SOURCE:
                 self.state["active_source"] = self._source_to_string(msg.value)
             elif msg.type == ControlEvents.SYS_RESET:
@@ -237,14 +247,16 @@ class ControlFactory(Node):
 
         self.blink_phase = not self.blink_phase
 
-        self.state["left_blink"] = (
-            self.blink_left_active and self.blink_phase
-        )
-        self.state["right_blink"] = (
-            self.blink_right_active and self.blink_phase
-        )
+        new_left = self.blink_left_active and self.blink_phase
+        new_right = self.blink_right_active and self.blink_phase
 
-        self.publish()
+        if (
+                new_left != self.state["left_blink"] or
+                new_right != self.state["right_blink"]
+        ):
+            self.state["left_blink"] = new_left
+            self.state["right_blink"] = new_right
+            self.publish()
 
     # ==================================================
     # ZEROING
@@ -252,12 +264,15 @@ class ControlFactory(Node):
 
     def _soft_zero(self):
         self.state["engine_start"] = False
-        self.state["clutch_down"] = False
+        self.state["engine_stop"] = False
+        self.state["clutch_active"] = False
+        self.state["brake_active"] = False
         self.state["move_allowed"] = False
-        self.state["linear"] = 0.0
-        self.state["angular"] = 0.0
+        #self.state["linear"] = 0.0
+        #self.state["angular"] = 0.0
 
     def _hard_zero(self):
+        #todo soft zero +
         for k, v in self.state.items():
             if isinstance(v, bool):
                 self.state[k] = False
@@ -278,24 +293,22 @@ class ControlFactory(Node):
         msg.emergency = self.emergency_active
         msg.active_source = self.state["active_source"]
 
-        msg.armed = self.state["armed"]
-        msg.power_mode = self.state["power_mode"]
-        msg.light_mode = self.state["light_mode"]
+        msg.armed_state = self.state["armed_state"]
+        msg.power_state = self.state["power_state"]
+        msg.light_state= self.state["light_state"]
 
         msg.engine_start = self.state["engine_start"]
-        msg.clutch_down = self.state["clutch_down"]
-        msg.high_speed = self.state["high_speed"]
+        msg.engine_stop = self.state["engine_stop"]
+        msg.clutch_active = self.state["clutch_active"]
+        msg.brake_active = self.state["brake_active"]
         msg.move_allowed = self.state["move_allowed"]
 
         msg.front_position = self.state["front_position"]
         msg.front_short = self.state["front_short"]
         msg.front_long = self.state["front_long"]
-        msg.back_light = self.state["back_light"]
+        msg.back_position = self.state["back_position"]
         msg.left_blink = self.state["left_blink"]
         msg.right_blink = self.state["right_blink"]
-
-        msg.linear = self.state["linear"]
-        msg.angular = self.state["angular"]
 
         msg.stamp = self.get_clock().now().to_msg()
 

@@ -15,10 +15,12 @@ class EspBridge(Node):
         super().__init__("esp_bridge")
 
         # ---------------- PARAMETERS ----------------
-        self.declare_parameter("esp_ip", "192.168.0.116")
+        self.declare_parameter("output_topic", "/tomo/states")
+        self.declare_parameter("esp_ip", "192.168.0.187")
         self.declare_parameter("esp_port", 8888)
         self.declare_parameter("heartbeat_rate", 0.5)
 
+        self.output_topic = str(self.get_parameter('output_topic').value)
         self.esp_ip = self.get_parameter("esp_ip").value
         self.esp_port = self.get_parameter("esp_port").value
         self.heartbeat_rate = self.get_parameter("heartbeat_rate").value
@@ -34,12 +36,7 @@ class EspBridge(Node):
         self.pending = {}
 
         # ---------------- ROS ----------------
-        self.create_subscription(
-            OutputStates,
-            "tomo/output",
-            self.output_cb,
-            20
-        )
+        self.create_subscription(OutputStates,self.output_topic,self.output_cb,20)
 
         self.create_timer(self.heartbeat_rate, self.send_heartbeat)
 
@@ -63,21 +60,20 @@ class EspBridge(Node):
     def serialize(s: OutputStates) -> str:
         return (
             "OUT,"
-            f"{int(s.armed)},"
-            f"{int(s.power_mode)},"
-            f"{int(s.light_mode)},"
+            f"{int(s.armed_state)},"
+            f"{int(s.power_state)},"
+            f"{int(s.light_state)},"
             f"{int(s.engine_start)},"
-            f"{int(s.clutch_down)},"
-            f"{int(s.high_speed)},"
+            f"{int(s.engine_stop)},"
+            f"{int(s.clutch_active)},"
+            f"{int(s.brake_active)},"
             f"{int(s.move_allowed)},"
             f"{int(s.front_position)},"
             f"{int(s.front_short)},"
             f"{int(s.front_long)},"
-            f"{int(s.back_light)},"
+            f"{int(s.back_position)},"
             f"{int(s.left_blink)},"
             f"{int(s.right_blink)},"
-            f"{s.linear:.3f},"
-            f"{s.angular:.3f}"
         )
 
     # ==================================================

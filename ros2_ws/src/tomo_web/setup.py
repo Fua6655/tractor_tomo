@@ -33,6 +33,7 @@ setup(
     entry_points={
         'console_scripts': [
             'web_node = tomo_web.web_node:main',
+            'web_server = tomo_web.web_server_old:main',
         ],
     },
 )

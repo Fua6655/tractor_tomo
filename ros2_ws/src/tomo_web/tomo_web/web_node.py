@@ -26,23 +26,23 @@ class WebRosBridge(Node):
     def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__('tomo_web')
 
+        self.declare_parameter('control_event_topic', '/control/events')
+        self.declare_parameter('control_emergency_topic', '/control/emergency')
+        self.declare_parameter("output_topic", "/tomo/states")
+
+        self.control_event_topic = str(self.get_parameter('control_event_topic').value)
+        self.control_emergency_topic = str(self.get_parameter('control_emergency_topic').value)
+        self.output_topic = str(self.get_parameter('output_topic').value)
+
         self.loop = loop
 
         # -------- PUBLISHERS --------
-        self.pub_control = self.create_publisher(
-            ControlEvents, 'control/events', 10
-        )
-        self.pub_emergency = self.create_publisher(
-            Emergency, 'control/emergency', 10
-        )
+        self.pub_event = self.create_publisher(ControlEvents, self.control_event_topic, 50)
+        self.pub_emergency = self.create_publisher(Emergency, self.control_emergency_topic, 10)
+
 
         # -------- SUBSCRIBERS --------
-        self.create_subscription(
-            OutputStates,
-            'tomo/output',
-            self.output_cb,
-            10
-        )
+        self.create_subscription(OutputStates, self.output_topic, self.output_cb, 20)
 
     # ---------- SEND CONTROL EVENT ----------
     def send_event(self, payload: dict):
@@ -51,10 +51,8 @@ class WebRosBridge(Node):
         msg.category = payload['category']
         msg.type = payload['type']
         msg.value = payload.get('value', 0)
-        msg.linear = payload.get('linear', 0.0)
-        msg.angular = payload.get('angular', 0.0)
         msg.stamp = self.get_clock().now().to_msg()
-        self.pub_control.publish(msg)
+        self.pub_event.publish(msg)
 
     # ---------- EMERGENCY ----------
     def send_emergency(self, active: bool, level: int, reason: str):
@@ -72,17 +70,18 @@ class WebRosBridge(Node):
                 'type': 'output',
                 'data': {
                     'emergency': msg.emergency,
-                    'armed': msg.armed,
-                    'power': msg.power_mode,
-                    'light': msg.light_mode,
-                    'engine': msg.engine_start,
-                    'clutch': msg.clutch_down,
-                    'speed': msg.high_speed,
+                    'armed': msg.armed_state,
+                    'power': msg.power_state,
+                    'light': msg.light_state,
+                    'engine_start': msg.engine_start,
+                    'engine_stop': msg.engine_stop,
+                    'clutch': msg.clutch_active,
+                    'speed': msg.brake_active,
                     'move': msg.move_allowed,
                     'fp': msg.front_position,
                     'fs': msg.front_short,
                     'fl': msg.front_long,
-                    'back': msg.back_light,
+                    'back': msg.back_position,
                     'lb': msg.left_blink,
                     'rb': msg.right_blink,
                     'source': msg.active_source,

@@ -27,15 +27,19 @@ class PS4Node(Node):
         self.declare_parameter("deadzone", 0.08)
         self.declare_parameter("linear_scale", 0.6)
         self.declare_parameter("angular_scale", 1.2)
-        self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
         self.declare_parameter('joy_topic', '/joy')
+        self.declare_parameter('control_event_topic', '/control/events')
+        self.declare_parameter('control_emergency_topic', '/control/emergency')
+        self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
 
         self.arm_hold_time = self.get_parameter("arm_hold_time").value
         self.deadzone = self.get_parameter("deadzone").value
         self.linear_scale = self.get_parameter("linear_scale").value
         self.angular_scale = self.get_parameter("angular_scale").value
-        self.cmd_topic = str(self.get_parameter('cmd_topic').value)
         self.joy_topic = str(self.get_parameter('joy_topic').value)
+        self.control_event_topic = str(self.get_parameter('control_event_topic').value)
+        self.control_emergency_topic = str(self.get_parameter('control_emergency_topic').value)
+        self.cmd_topic = str(self.get_parameter('cmd_topic').value)
 
         # ---------------- CONTROLLER ----------------
         self.ps4 = PS4Controller()
@@ -46,9 +50,9 @@ class PS4Node(Node):
         self._prev = {}
 
         # ---------------- PUB / SUB ----------------
-        self.pub_event = self.create_publisher(ControlEvents,"control/event",50)
-        self.pub_emergency = self.create_publisher(Emergency,"control/emergency",10)
-        self.cmd_pub = self.create_publisher(Twist, self.cmd_topic, 10)
+        self.pub_event = self.create_publisher(ControlEvents,self.control_event_topic,50)
+        self.pub_emergency = self.create_publisher(Emergency,self.control_emergency_topic,10)
+        self.pub_cmd = self.create_publisher(Twist, self.cmd_topic, 10)
 
         self.create_subscription(Joy,self.joy_topic,self.joy_cb,50)
 
@@ -224,7 +228,7 @@ class PS4Node(Node):
         twist = Twist()
         twist.linear.x = lin
         twist.angular.z = ang
-        self.cmd_pub.publish(twist)
+        self.pub_cmd.publish(twist)
 
 
 def main():
