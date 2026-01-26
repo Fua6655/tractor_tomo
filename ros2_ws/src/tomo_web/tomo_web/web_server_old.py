@@ -100,7 +100,7 @@ ros_node: WebRosBridge | None = None
 
 app = FastAPI()
 
-html_dir = files("control_tomo.web") / "html"
+html_dir = files("tomo_web") / "html"
 app.mount("/html", StaticFiles(directory=str(html_dir)), name="html")
 
 
@@ -217,7 +217,7 @@ async def startup():
 def main():
     import uvicorn
     uvicorn.run(
-        "control_tomo.web.web_server:app",
+        "tomo_web.web_server_old:app",
         host="0.0.0.0",
         port=8000,
         log_level="info"

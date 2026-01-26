@@ -74,7 +74,7 @@ def generate_launch_description():
         # ================= WEB → ControlEvents =================
         Node(
             package="tomo_web",
-            executable="web_server",
+            executable="web_node",
             name="tomo_web",
             output="screen",
             parameters=[{

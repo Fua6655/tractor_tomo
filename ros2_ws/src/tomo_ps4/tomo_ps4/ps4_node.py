@@ -6,55 +6,55 @@ from typing import List
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Twist
 
 from tomo_msgs.msg import ControlEvents, Emergency
-
 from .ps4_controller import PS4Controller
 
 
 class PS4Node(Node):
-    """
-    PS4 → ControlEvents
-    Event-based, no direct control of outputs.
-    """
 
     def __init__(self):
         super().__init__("ps4_node")
 
         # ---------------- PARAMETERS ----------------
-        self.declare_parameter("arm_hold_time", 2.0)
-        self.declare_parameter("deadzone", 0.08)
-        self.declare_parameter("linear_scale", 0.6)
-        self.declare_parameter("angular_scale", 1.2)
-        self.declare_parameter('joy_topic', '/joy')
-        self.declare_parameter('control_event_topic', '/control/events')
-        self.declare_parameter('control_emergency_topic', '/control/emergency')
-        self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
+        self.declare_parameter("joy_topic", "/joy")
+        self.declare_parameter("control_event_topic", "/control/events")
+        self.declare_parameter("control_emergency_topic", "/control/emergency")
 
-        self.arm_hold_time = self.get_parameter("arm_hold_time").value
-        self.deadzone = self.get_parameter("deadzone").value
-        self.linear_scale = self.get_parameter("linear_scale").value
-        self.angular_scale = self.get_parameter("angular_scale").value
-        self.joy_topic = str(self.get_parameter('joy_topic').value)
-        self.control_event_topic = str(self.get_parameter('control_event_topic').value)
-        self.control_emergency_topic = str(self.get_parameter('control_emergency_topic').value)
-        self.cmd_topic = str(self.get_parameter('cmd_topic').value)
+        self.declare_parameter("arm_hold_time", 2.0)
+        self.declare_parameter("power_hold_time", 1.0)
+        self.declare_parameter("light_hold_time", 1.0)
+        self.declare_parameter("move_hold_time", 2.0)
+
+        self.joy_topic = self.get_parameter("joy_topic").value
+        self.event_topic = self.get_parameter("control_event_topic").value
+        self.emergency_topic = self.get_parameter("control_emergency_topic").value
+
+        self.arm_hold = self.get_parameter("arm_hold_time").value
+        self.power_hold = self.get_parameter("power_hold_time").value
+        self.light_hold = self.get_parameter("light_hold_time").value
+        self.move_hold = self.get_parameter("move_hold_time").value
 
         # ---------------- CONTROLLER ----------------
         self.ps4 = PS4Controller()
 
         # ---------------- STATE ----------------
         self.armed = False
-        self._x_press_time = None
+        self.power = False
+        self.light = False
+
+        self._hold_start = {}
         self._prev = {}
 
-        # ---------------- PUB / SUB ----------------
-        self.pub_event = self.create_publisher(ControlEvents,self.control_event_topic,50)
-        self.pub_emergency = self.create_publisher(Emergency,self.control_emergency_topic,10)
-        self.pub_cmd = self.create_publisher(Twist, self.cmd_topic, 10)
+        # ---------------- ROS ----------------
+        self.pub_event = self.create_publisher(
+            ControlEvents, self.event_topic, 30
+        )
+        self.pub_emergency = self.create_publisher(
+            Emergency, self.emergency_topic, 10
+        )
 
-        self.create_subscription(Joy,self.joy_topic,self.joy_cb,50)
+        self.create_subscription(Joy, self.joy_topic, self.joy_cb, 30)
 
         self.get_logger().info("🎮 PS4 node READY")
 
@@ -62,12 +62,7 @@ class PS4Node(Node):
     # HELPERS
     # ==================================================
 
-    def send_event(
-        self,
-        category: int,
-        type_: int,
-        value: int = 0,
-    ):
+    def send_event(self, category, type_, value):
         msg = ControlEvents()
         msg.source = ControlEvents.SOURCE_PS4
         msg.category = category
@@ -76,29 +71,32 @@ class PS4Node(Node):
         msg.stamp = self.get_clock().now().to_msg()
         self.pub_event.publish(msg)
 
-    def edge(self, name: str, now: bool) -> bool:
+    def edge(self, name, now):
         prev = self._prev.get(name, False)
         self._prev[name] = now
         return now and not prev
 
-    def apply_deadzone(self, v: float) -> float:
-        return 0.0 if abs(v) < self.deadzone else v
+    def hold(self, name, pressed, hold_time, now):
+        if pressed:
+            if name not in self._hold_start:
+                self._hold_start[name] = now
+            elif now - self._hold_start[name] >= hold_time:
+                self._hold_start.pop(name)
+                return True
+        else:
+            self._hold_start.pop(name, None)
+        return False
 
     # ==================================================
     # MAIN CALLBACK
     # ==================================================
 
     def joy_cb(self, msg: Joy):
-        axes: List[float] = list(msg.axes)
-        buttons: List[int] = list(msg.buttons)
         now = time.monotonic()
-
-        self.ps4.process_joy(axes, buttons)
+        self.ps4.process_joy(msg.axes, msg.buttons)
         self.ps4.check_timeout()
 
-        # --------------------------------------------------
-        # EMERGENCY (PS BUTTON or timeout)
-        # --------------------------------------------------
+        # ---------- EMERGENCY ----------
         if self.ps4.joystick_lost:
             em = Emergency()
             em.active = True
@@ -108,127 +106,106 @@ class PS4Node(Node):
             self.pub_emergency.publish(em)
             return
 
-        # --------------------------------------------------
-        # ARM / DISARM (X HOLD)
-        # --------------------------------------------------
-        x = bool(self.ps4.X_btn)
-
-        if x and self._x_press_time is None:
-            self._x_press_time = now
-
-        if (
-            x
-            and self._x_press_time
-            and now - self._x_press_time >= self.arm_hold_time
-        ):
+        # ---------- ARM ----------
+        if self.hold("X", self.ps4.X_btn, self.arm_hold, now):
             self.armed = not self.armed
             self.send_event(
                 ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_ARMED,
                 int(self.armed),
             )
-            self.get_logger().info(
-                f"{'ARMED' if self.armed else 'DISARMED'}"
-            )
-            self._x_press_time = None
 
-        if not x:
-            self._x_press_time = None
-
-        # --------------------------------------------------
-        # POWER MODE (O toggle)
-        # --------------------------------------------------
-        if self.edge("O", bool(self.ps4.O_btn)) and self.armed:
+        # ---------- POWER ----------
+        if self.hold("O", self.ps4.O_btn, self.power_hold, now):
+            self.power = not self.power
             self.send_event(
                 ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_POWER,
-                1,
+                int(self.power),
             )
 
-        # --------------------------------------------------
-        # LIGHT MODE (SQUARE toggle)
-        # --------------------------------------------------
-        if self.edge("SQUARE", bool(self.ps4.Square_btn)) and self.armed:
+        # ---------- LIGHT MODE ----------
+        if self.hold("SQ", self.ps4.Square_btn, self.light_hold, now):
+            self.light = not self.light
             self.send_event(
                 ControlEvents.CATEGORY_STATE,
                 ControlEvents.STATE_LIGHT,
-                1,
+                int(self.light),
             )
 
-        # --------------------------------------------------
-        # EVENTS
-        # --------------------------------------------------
+        # ---------- EVENTS ----------
         self.send_event(
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_START,
-            int(self.ps4.Triangle_btn and self.armed),
+            int(self.ps4.Triangle_btn),
         )
 
         self.send_event(
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_STOP,
-            int(self.ps4.R1_btn and self.armed),
+            int(not self.armed),
         )
 
         self.send_event(
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.CLUTCH_ACTIVE,
-            int(self.ps4.R1_btn and self.armed),
+            int(self.ps4.R1_btn)
         )
 
         self.send_event(
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.BRAKE_ACTIVE,
-            int(self.ps4.R1_btn and self.armed),
+            int(self.ps4.L1_btn),
         )
 
-        self.send_event(
-            ControlEvents.CATEGORY_EVENT,
-            ControlEvents.MOVE_ALLOWED,
-            int(self.ps4.L1_btn and self.armed),
-        )
+        if self.hold("MOVE", self.ps4.L1_btn, self.move_hold, now):
+            self.send_event(
+                ControlEvents.CATEGORY_EVENT,
+                ControlEvents.MOVE_ALLOWED,
+                1,
+            )
+        if not self.ps4.L1_btn:
+            self.send_event(
+                ControlEvents.CATEGORY_EVENT,
+                ControlEvents.MOVE_ALLOWED,
+                0,
+            )
 
-        # --------------------------------------------------
-        # LIGHTS (DPAD)
-        # --------------------------------------------------
-        if self.edge("UP", bool(self.ps4.up_btn)):
+        # ---------- LIGHTS ----------
+        if self.edge("ARMED_FP", self.armed):
             self.send_event(
                 ControlEvents.CATEGORY_LIGHT,
-                ControlEvents.FRONT_SHORT,
+                ControlEvents.FRONT_POSITION,
+                int(self.armed),
+            )
+
+        if self.light and self.edge("UP", self.ps4.up_btn):
+            self.send_event(
+                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.FRONT_SEQUENCE_NEXT,
                 1,
             )
 
-        if self.edge("DOWN", bool(self.ps4.down_btn)):
+        if self.light and self.edge("DOWN", self.ps4.down_btn):
             self.send_event(
                 ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.BACK_POSITION,
                 1,
             )
 
-        if self.edge("LEFT", bool(self.ps4.left_btn)):
+        if self.light and self.edge("LEFT", self.ps4.left_btn):
             self.send_event(
                 ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.LEFT_BLINK,
                 1,
             )
 
-        if self.edge("RIGHT", bool(self.ps4.right_btn)):
+        if self.light and self.edge("RIGHT", self.ps4.right_btn):
             self.send_event(
                 ControlEvents.CATEGORY_LIGHT,
                 ControlEvents.RIGHT_BLINK,
                 1,
             )
-
-        # --------------------------------------------------
-        # MOTION
-        # --------------------------------------------------
-        lin = self.apply_deadzone(self.ps4.joy_left_y) * self.linear_scale
-        ang = self.apply_deadzone(self.ps4.joy_right_x) * self.angular_scale
-
-        twist = Twist()
-        twist.linear.x = lin
-        twist.angular.z = ang
-        self.pub_cmd.publish(twist)
 
 
 def main():

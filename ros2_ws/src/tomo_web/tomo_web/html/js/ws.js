@@ -1,8 +1,6 @@
 import { initUI, updateState, updateSource } from "./ui.js";
+import { SOURCE, CATEGORY, SYSTEM } from "./ros_enums.js";
 
-// --------------------------------------------------
-// WEBSOCKET
-// --------------------------------------------------
 const ws = new WebSocket(
   (location.protocol === "https:" ? "wss://" : "ws://") +
   location.host + "/ws"
@@ -13,55 +11,83 @@ ws.onopen = () => {
   initUI();
 };
 
-// --------------------------------------------------
-// GLOBAL API
-// --------------------------------------------------
-window.sendCmd = function (target, name, value) {
+// ==================================================
+// SEND NORMAL EVENT / STATE
+// ==================================================
+window.sendEvent = function (meta, name) {
   ws.send(JSON.stringify({
-    type: "cmd",
-    target,
-    data: buildPayload(target, name, value),
+    type: "event",
+    payload: {
+      source: SOURCE.WEB,
+      category: meta.category, // dolazi iz STATE_MAP
+      type: meta.code,         // dolazi iz STATE_MAP
+      value: 1
+    }
   }));
 };
 
-window.sendForce = function (web, auto) {
-  ws.send(JSON.stringify({
-    type: "force",
-    web,
-    auto,
-  }));
-};
-
-window.sendEmergency = function (value) {
+// ==================================================
+// EMERGENCY (HARD / SOFT / RELEASE)
+// ==================================================
+window.sendEmergency = function (payload) {
   ws.send(JSON.stringify({
     type: "emergency",
-    value,
+    active: payload.active,
+    level: payload.level
   }));
 };
 
-// --------------------------------------------------
-// PAYLOAD BUILDER (INDEPENDENT BITS)
-// --------------------------------------------------
-function buildPayload(target, name, value) {
-  const maps = {
-    events: ["ENGINE", "CLUTCH", "SPEED", "MOVE"],
-    lights: ["FP", "FS", "FL", "BACK", "LB", "RB"],
-  };
+// ==================================================
+// FORCE SOURCE (OVO JE KLJUČNO)
+// ==================================================
+window.sendSource = function (label) {
 
-  return maps[target]?.map(k => (k === name ? value : 0)) ?? [];
-}
+  let value = SOURCE.PS4;
 
-// --------------------------------------------------
-// INCOMING
-// --------------------------------------------------
+  if (label.includes("WEB"))  value = SOURCE.WEB;
+  if (label.includes("AUTO")) value = SOURCE.AUTO;
+
+  ws.send(JSON.stringify({
+    type: "event",
+    payload: {
+      source: SOURCE.WEB,          // web šalje zahtjev
+      category: CATEGORY.SYSTEM,   // SYSTEM
+      type: SYSTEM.FORCE_SOURCE,   // FORCE SOURCE
+      value: value                // PS4 / WEB / AUTO
+    }
+  }));
+};
+
+// ==================================================
+// RECEIVE OUTPUT FROM FACTORY
+// ==================================================
 ws.onmessage = (e) => {
   const msg = JSON.parse(e.data);
 
-  if (msg.type === "state") {
-    updateState(msg.name, msg.value);
-  }
+  if (msg.type === "output") {
 
-  if (msg.type === "source") {
-    updateSource(msg.value);
+    const d = msg.data;
+
+    // ---- SOURCE ----
+    updateSource(d.source);
+
+    // ---- STATES ----
+    updateState("ARMED", d.armed ? "1" : "0");
+    updateState("POWER", d.power ? "1" : "0");
+    updateState("LIGHT", d.light ? "1" : "0");
+
+    // ---- EVENTS ----
+    updateState("ENGINE_START", d.engine_start ? "1" : "0");
+    updateState("CLUTCH", d.clutch ? "1" : "0");
+    updateState("BRAKE", d.brake ? "1" : "0");
+    updateState("MOVE", d.move ? "1" : "0");
+
+    // ---- LIGHTS ----
+    updateState("FP", d.fp ? "1" : "0");
+    updateState("FS", d.fs ? "1" : "0");
+    updateState("FL", d.fl ? "1" : "0");
+    updateState("BP", d.bp ? "1" : "0");
+    updateState("LB", d.lb ? "1" : "0");
+    updateState("RB", d.rb ? "1" : "0");
   }
 };

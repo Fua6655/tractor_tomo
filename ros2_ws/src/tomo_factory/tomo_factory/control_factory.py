@@ -2,68 +2,65 @@
 
 import rclpy
 from rclpy.node import Node
+from enum import Enum
 
 from tomo_msgs.msg import ControlEvents, OutputStates, Emergency
-from geometry_msgs.msg import Twist
 
+
+# ==================================================
+# ENUMS
+# ==================================================
+
+class ArmState(Enum):
+    DISARMED = 0
+    ARMED = 1
+
+
+class PowerState(Enum):
+    OFF = 0
+    ON = 1
+
+
+class LightState(Enum):
+    OFF = 0
+    ON = 1
+
+
+# ==================================================
+# CONTROL FACTORY
+# ==================================================
 
 class ControlFactory(Node):
-    """
-    Central reducer + state machine.
-
-    INPUT:
-      - ControlEvents  (ps4 / web / auto)
-      - Emergency      (soft / hard)
-
-    OUTPUT:
-      - OutputStates   (single authoritative state for ESP)
-    """
 
     def __init__(self):
         super().__init__("control_factory")
 
-        # ---------------- PARAMETERS ----------------
-        self.declare_parameter('control_event_topic', '/control/events')
-        self.declare_parameter('control_emergency_topic', '/control/emergency')
-        self.declare_parameter('ps4_cmd_topic', '/ps4/cmd_vel')
-        self.declare_parameter('auto_cmd_topic', '/auto/cmd_vel')
-        self.declare_parameter('output_topic', '/tomo/states')
-        self.declare_parameter('output_cmd_topic', 'tomo/cmd_vel')
-        self.declare_parameter('ps4_timeout', 0.5)
-        self.declare_parameter('web_timeout', 1.0)
-        self.declare_parameter('auto_timeout', 0.5)
+        self.declare_parameter("control_event_topic", "/control/events")
+        self.declare_parameter("control_emergency_topic", "/control/emergency")
+        self.declare_parameter("output_topic", "/tomo/states")
 
-
-        self.control_event_topic = self.get_parameter("control_event_topic").value
-        self.control_emergency_topic = self.get_parameter("control_emergency_topic").value
-        self.ps4_cmd_topic = self.get_parameter("ps4_cmd_topic").value
-        self.auto_cmd_topic = self.get_parameter("auto_cmd_topic").value
-        self.output_topic = str(self.get_parameter('output_topic').value)
-        self.output_cmd_topic = str(self.get_parameter('output_cmd_topic').value)
-        self.ps4_timeout = float(self.get_parameter('ps4_timeout').value)
-        self.web_timeout = float(self.get_parameter('web_timeout').value)
-        self.auto_timeout = float(self.get_parameter('auto_timeout').value)
+        self.event_topic = self.get_parameter("control_event_topic").value
+        self.emergency_topic = self.get_parameter("control_emergency_topic").value
+        self.output_topic = self.get_parameter("output_topic").value
 
         # ==================================================
-        # REDUCER STATE (SINGLE SOURCE OF TRUTH)
+        # FSM STATES
+        # ==================================================
+        self.arm_state = ArmState.DISARMED
+        self.power_state = PowerState.OFF
+        self.light_state = LightState.OFF
+
+        # ==================================================
+        # OUTPUT STATE
         # ==================================================
         self.state = {
-            "active_source": "PS4",
-            "emergency": False,
-
-            # states
-            "armed_state": False,
-            "power_state": False,
-            "light_state": False,
-
-            # events
             "engine_start": False,
-            "engine_stop": False,
+            "engine_stop": True,
+
             "clutch_active": False,
             "brake_active": False,
             "move_allowed": False,
 
-            # lights
             "front_position": False,
             "front_short": False,
             "front_long": False,
@@ -72,32 +69,37 @@ class ControlFactory(Node):
             "right_blink": False,
         }
 
+        # FRONT LIGHT FSM
+        self.front_mode = 0  # 0=OFF, 1=SHORT, 2=LONG
+
+        # BLINKERS
+        self.blink_left_active = False
+        self.blink_right_active = False
+        self.blink_phase = False
+        self.blink_period = 0.5
+        self.blink_timer = self.create_timer(self.blink_period, self._blink_timer)
+
         # ==================================================
         # EMERGENCY
         # ==================================================
         self.emergency_active = False
-        self.emergency_level = 0   # 0 = soft, 1 = hard
+        self.emergency_level = 0  # 0 none, 1 soft, 2 hard
+
+        # SOFT SAVE
         self.saved_state = None
+        self.saved_arm = None
+        self.saved_power = None
+        self.saved_light = None
+        self.saved_front_mode = None
+        self.saved_blink_l = None
+        self.saved_blink_r = None
 
-        # ==================================================
-        # BLINKER INTERNAL STATE
-        # ==================================================
-        self.blink_left_active = False
-        self.blink_right_active = False
-        self.blink_phase = False
+        # ROS
+        self.create_subscription(ControlEvents, self.event_topic, self.event_cb, 50)
+        self.create_subscription(Emergency, self.emergency_topic, self.emergency_cb, 10)
+        self.pub_output = self.create_publisher(OutputStates, self.output_topic, 10)
 
-        self.create_timer(0.5, self._blink_timer)
-
-        # ==================================================
-        # ROS INTERFACES
-        # ==================================================
-        self.create_subscription(ControlEvents,self.control_event_topic,self.event_cb,50)
-        self.create_subscription(Emergency,self.control_emergency_topic,self.emergency_cb,10)
-
-        self.pub_output = self.create_publisher(OutputStates,self.output_topic,10)
-        self.pub_output_cmd_vel = self.create_publisher(Twist, self.output_cmd_topic, 10)
-
-        self.get_logger().info("✅ ControlFactory READY (event-based)")
+        self.get_logger().info("✅ ControlFactory FINAL (ENGINE_START level-based)")
 
     # ==================================================
     # EMERGENCY HANDLING
@@ -106,29 +108,44 @@ class ControlFactory(Node):
     def emergency_cb(self, msg: Emergency):
 
         # -------- HARD EMERGENCY --------
-        if msg.active and msg.level == 1:
+        if msg.active and msg.level == Emergency.LEVEL_HARD:
             self.get_logger().error("🚨 HARD EMERGENCY")
 
             self.emergency_active = True
-            self.emergency_level = 1
+            self.emergency_level = Emergency.LEVEL_HARD
+            self._set_blink_period(0.25)
 
-            self._hard_zero()
-            self.state["active_source"] = "EMERGENCY"
+            armed = self.arm_state
+            front_pos = self.state["front_position"]
+
+            self._hard_reset()
+
+            self.arm_state = armed
+            self.state["front_position"] = front_pos
+            self.state["engine_stop"] = True
 
             self.publish()
             return
 
         # -------- SOFT EMERGENCY --------
-        if msg.active and msg.level == 0:
+        if msg.active and msg.level == Emergency.LEVEL_SOFT:
             self.get_logger().warn("⚠️ SOFT EMERGENCY")
 
             if not self.emergency_active:
-                self.saved_state = self.state.copy()
+                self._save_soft_state()
 
             self.emergency_active = True
-            self.emergency_level = 0
+            self.emergency_level = Emergency.LEVEL_SOFT
+            self._set_blink_period(0.5)
 
-            self._soft_zero()
+            # block dangerous stuff
+            self.state["engine_start"] = False
+            self.state["move_allowed"] = False
+            self.state["clutch_active"] = False
+            self.state["brake_active"] = False
+            self.power_state = PowerState.OFF
+            self.state["engine_stop"] = True
+
             self.publish()
             return
 
@@ -136,37 +153,26 @@ class ControlFactory(Node):
         if not msg.active and self.emergency_active:
             self.get_logger().info("✅ Emergency released")
 
-            if self.emergency_level == 0 and self.saved_state:
-                self.state = self.saved_state
-                self.saved_state = None
+            if self.emergency_level == Emergency.LEVEL_SOFT:
+                self._restore_soft_state()
 
             self.emergency_active = False
             self.emergency_level = 0
+            self._set_blink_period(0.5)
 
             self.publish()
 
     # ==================================================
-    # EVENT CALLBACK (REDUCER ENTRY)
+    # EVENT CALLBACK
     # ==================================================
 
     def event_cb(self, msg: ControlEvents):
 
-        # HARD emergency blocks everything
-        if self.emergency_active and self.emergency_level == 1:
+        if self.emergency_active and self.emergency_level == Emergency.LEVEL_HARD:
             return
 
-        # SOFT emergency blocks dangerous stuff
-        if self.emergency_active and self.emergency_level == 0:
-            if msg.category in (
-                ControlEvents.CATEGORY_EVENT,
-                #ControlEvents.CATEGORY_MOTION,
-            ):
-                return
-
-        # SOURCE GUARD
-        src = self._source_to_string(msg.source)
-        if src != self.state["active_source"]:
-            if msg.category != ControlEvents.CATEGORY_SYSTEM:
+        if self.emergency_active and self.emergency_level == Emergency.LEVEL_SOFT:
+            if msg.category == ControlEvents.CATEGORY_EVENT:
                 return
 
         self.reduce(msg)
@@ -178,110 +184,168 @@ class ControlFactory(Node):
 
     def reduce(self, msg: ControlEvents):
 
-        # ---------- STATES ----------
-        if msg.category == ControlEvents.CATEGORY_STATE:
-            if msg.type == ControlEvents.STATE_ARMED:
-                self.state["armed_state"] = bool(msg.value)
-            elif msg.type == ControlEvents.STATE_POWER:
-                self.state["power_state"] = bool(msg.value)
-            elif msg.type == ControlEvents.STATE_LIGHT:
-                self.state["light_state"] = bool(msg.value)
+        # DISARMED
+        if self.arm_state == ArmState.DISARMED:
+            self.state["engine_stop"] = True
+            if (
+                msg.category == ControlEvents.CATEGORY_STATE and
+                msg.type == ControlEvents.STATE_ARMED and
+                msg.value
+            ):
+                self._enter_armed()
+            return
 
-        # ---------- EVENTS ----------
-        elif msg.category == ControlEvents.CATEGORY_EVENT:
+        # STATES
+        if msg.category == ControlEvents.CATEGORY_STATE:
+
+            if msg.type == ControlEvents.STATE_ARMED and not msg.value:
+                self._exit_armed()
+                return
+
+            if msg.type == ControlEvents.STATE_POWER:
+                if msg.value:
+                    self._enter_power()
+                else:
+                    self._exit_power()
+                return
+
+            if msg.type == ControlEvents.STATE_LIGHT:
+                self.light_state = LightState.ON if msg.value else LightState.OFF
+                return
+
+        # BLOCK LIGHT COMMANDS
+        if msg.category == ControlEvents.CATEGORY_LIGHT and self.light_state != LightState.ON:
+            return
+
+        # EVENTS (LEVEL-BASED)
+        if msg.category == ControlEvents.CATEGORY_EVENT:
+
             if msg.type == ControlEvents.ENGINE_START:
-                self.state["engine_start"] = bool(msg.value)
-            elif msg.type == ControlEvents.ENGINE_STOP:
-                self.state["engine_stop"] = bool(msg.value)
-            elif msg.type == ControlEvents.CLUTCH_ACTIVE:
-                self.state["clutch_active"] = bool(msg.value)
-            elif msg.type == ControlEvents.BRAKE_ACTIVE:
-                self.state["brake_active"] = bool(msg.value)
+                self.state["engine_start"] = (
+                    bool(msg.value) and self.power_state == PowerState.ON
+                )
+
             elif msg.type == ControlEvents.MOVE_ALLOWED:
                 self.state["move_allowed"] = bool(msg.value)
 
-        # ---------- LIGHTS ----------
+            elif msg.type == ControlEvents.CLUTCH_ACTIVE and self.power_state == PowerState.OFF:
+                self.state["clutch_active"] = bool(msg.value)
+
+            elif msg.type == ControlEvents.BRAKE_ACTIVE and self.power_state == PowerState.OFF:
+                self.state["brake_active"] = bool(msg.value)
+
+        # LIGHTS
         elif msg.category == ControlEvents.CATEGORY_LIGHT:
 
-            if msg.type == ControlEvents.LEFT_BLINK:
-                self.blink_left_active = not self.blink_left_active
-                if not self.blink_left_active:
-                    self.state["left_blink"] = False
-
-            elif msg.type == ControlEvents.RIGHT_BLINK:
-                self.blink_right_active = not self.blink_right_active
-                if not self.blink_right_active:
-                    self.state["right_blink"] = False
-
-            elif msg.type == ControlEvents.FRONT_POSITION:
-                self.state["front_position"] = not self.state["front_position"]
-
-            elif msg.type == ControlEvents.FRONT_SHORT:
-                self.state["front_short"] = not self.state["front_short"]
-
-            elif msg.type == ControlEvents.FRONT_LONG:
-                self.state["front_long"] = not self.state["front_long"]
+            if msg.type == ControlEvents.FRONT_SEQUENCE_NEXT:
+                self.front_mode = (self.front_mode + 1) % 3
+                self.state["front_short"] = self.front_mode == 1
+                self.state["front_long"] = self.front_mode == 2
 
             elif msg.type == ControlEvents.BACK_POSITION:
                 self.state["back_position"] = not self.state["back_position"]
 
-        # ---------- MOTION ----------
-        #elif msg.category == ControlEvents.CATEGORY_MOTION:
-         #   self.state["linear"] = msg.linear
-          #  self.state["angular"] = msg.angular
+            elif msg.type == ControlEvents.LEFT_BLINK:
+                self.blink_left_active = not self.blink_left_active
 
-        # ---------- SYSTEM ----------
-        elif msg.category == ControlEvents.CATEGORY_SYSTEM:
-            if msg.type == ControlEvents.SYS_FORCE_SOURCE:
-                self.state["active_source"] = self._source_to_string(msg.value)
-            elif msg.type == ControlEvents.SYS_RESET:
-                self._hard_zero()
+            elif msg.type == ControlEvents.RIGHT_BLINK:
+                self.blink_right_active = not self.blink_right_active
+
+    # ==================================================
+    # FSM TRANSITIONS
+    # ==================================================
+
+    def _enter_armed(self):
+        self.arm_state = ArmState.ARMED
+        self.state["engine_stop"] = False
+        self.state["front_position"] = True
+
+    def _exit_armed(self):
+        self._hard_reset()
+        self.arm_state = ArmState.DISARMED
+        self.state["engine_stop"] = True
+
+    def _enter_power(self):
+        if self.power_state == PowerState.ON:
+            return
+        self.power_state = PowerState.ON
+
+        # IMPORTANT: do NOT inherit old input
+        self.state["engine_start"] = False
+
+        self.state["clutch_active"] = True
+        self.state["brake_active"] = True
+
+    def _exit_power(self):
+        self.power_state = PowerState.OFF
+        self.state["engine_start"] = False
+        self.state["clutch_active"] = False
+        self.state["brake_active"] = False
 
     # ==================================================
     # BLINK TIMER
     # ==================================================
 
     def _blink_timer(self):
-        if not (self.blink_left_active or self.blink_right_active):
-            return
-
         self.blink_phase = not self.blink_phase
 
-        new_left = self.blink_left_active and self.blink_phase
-        new_right = self.blink_right_active and self.blink_phase
+        if self.emergency_active:
+            self.state["left_blink"] = self.blink_phase
+            self.state["right_blink"] = self.blink_phase
+        else:
+            self.state["left_blink"] = self.blink_left_active and self.blink_phase
+            self.state["right_blink"] = self.blink_right_active and self.blink_phase
 
-        if (
-                new_left != self.state["left_blink"] or
-                new_right != self.state["right_blink"]
-        ):
-            self.state["left_blink"] = new_left
-            self.state["right_blink"] = new_right
-            self.publish()
+        self.publish()
+
+    def _set_blink_period(self, period):
+        if self.blink_period == period:
+            return
+        self.blink_period = period
+        self.blink_timer.cancel()
+        self.blink_timer = self.create_timer(period, self._blink_timer)
 
     # ==================================================
-    # ZEROING
+    # SOFT SAVE / RESTORE
     # ==================================================
 
-    def _soft_zero(self):
-        self.state["engine_start"] = False
-        self.state["engine_stop"] = False
-        self.state["clutch_active"] = False
-        self.state["brake_active"] = False
-        self.state["move_allowed"] = False
-        #self.state["linear"] = 0.0
-        #self.state["angular"] = 0.0
+    def _save_soft_state(self):
+        self.saved_state = self.state.copy()
+        self.saved_arm = self.arm_state
+        self.saved_power = self.power_state
+        self.saved_light = self.light_state
+        self.saved_front_mode = self.front_mode
+        self.saved_blink_l = self.blink_left_active
+        self.saved_blink_r = self.blink_right_active
 
-    def _hard_zero(self):
-        #todo soft zero +
-        for k, v in self.state.items():
-            if isinstance(v, bool):
-                self.state[k] = False
-            elif isinstance(v, float):
-                self.state[k] = 0.0
+    def _restore_soft_state(self):
+        if not self.saved_state:
+            return
 
+        self.state = self.saved_state
+        self.arm_state = self.saved_arm
+        self.power_state = self.saved_power
+        self.light_state = self.saved_light
+        self.front_mode = self.saved_front_mode
+        self.blink_left_active = self.saved_blink_l
+        self.blink_right_active = self.saved_blink_r
+
+        self.saved_state = None
+
+    # ==================================================
+    # HARD RESET
+    # ==================================================
+
+    def _hard_reset(self):
+        for k in self.state:
+            self.state[k] = False
+
+        self.state["engine_stop"] = True
+        self.front_mode = 0
+        self.power_state = PowerState.OFF
+        self.light_state = LightState.OFF
         self.blink_left_active = False
         self.blink_right_active = False
-        self.blink_phase = False
 
     # ==================================================
     # PUBLISH
@@ -290,12 +354,9 @@ class ControlFactory(Node):
     def publish(self):
         msg = OutputStates()
 
-        msg.emergency = self.emergency_active
-        msg.active_source = self.state["active_source"]
-
-        msg.armed_state = self.state["armed_state"]
-        msg.power_state = self.state["power_state"]
-        msg.light_state= self.state["light_state"]
+        msg.armed_state = self.arm_state == ArmState.ARMED
+        msg.power_state = self.power_state == PowerState.ON
+        msg.light_state = self.light_state == LightState.ON
 
         msg.engine_start = self.state["engine_start"]
         msg.engine_stop = self.state["engine_stop"]
@@ -311,22 +372,7 @@ class ControlFactory(Node):
         msg.right_blink = self.state["right_blink"]
 
         msg.stamp = self.get_clock().now().to_msg()
-
         self.pub_output.publish(msg)
-
-    # ==================================================
-    # UTILS
-    # ==================================================
-
-    @staticmethod
-    def _source_to_string(src: int) -> str:
-        if src == ControlEvents.SOURCE_PS4:
-            return "PS4"
-        if src == ControlEvents.SOURCE_WEB:
-            return "WEB"
-        if src == ControlEvents.SOURCE_AUTO:
-            return "AUTO"
-        return "UNKNOWN"
 
 
 def main():

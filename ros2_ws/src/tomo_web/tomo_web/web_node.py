@@ -76,12 +76,12 @@ class WebRosBridge(Node):
                     'engine_start': msg.engine_start,
                     'engine_stop': msg.engine_stop,
                     'clutch': msg.clutch_active,
-                    'speed': msg.brake_active,
+                    'brake': msg.brake_active,
                     'move': msg.move_allowed,
                     'fp': msg.front_position,
                     'fs': msg.front_short,
                     'fl': msg.front_long,
-                    'back': msg.back_position,
+                    'bp': msg.back_position,
                     'lb': msg.left_blink,
                     'rb': msg.right_blink,
                     'source': msg.active_source,
@@ -93,12 +93,18 @@ class WebRosBridge(Node):
 # ==================================================
 # FASTAPI
 # ==================================================
-app = FastAPI()
 ros_node: WebRosBridge | None = None
 
-html_dir = files("tomo_web") / "html"
+app = FastAPI()
 
-app.mount("/", StaticFiles(directory=html_dir, html=True), name="html")
+html_dir = files("tomo_web") / "html"
+app.mount("/html", StaticFiles(directory=str(html_dir)), name="html")
+
+
+@app.get("/")
+def root():
+    return RedirectResponse("/html/index.html")
+
 
 WS_CLIENTS: set[WebSocket] = set()
 
@@ -110,10 +116,10 @@ async def websocket_endpoint(ws: WebSocket):
         while True:
             data = await ws.receive_json()
 
-            if data['type'] == 'event' and ros_node:
+            if data['type'] == 'event':
                 ros_node.send_event(data['payload'])
 
-            if data['type'] == 'emergency' and ros_node:
+            if data['type'] == 'emergency':
                 ros_node.send_emergency(
                     data['active'],
                     data.get('level', 1),
@@ -168,4 +174,4 @@ async def startup():
 
 def main():
     import uvicorn
-    uvicorn.run(app, host='0.0.0.0', port=8000, log_level='info')
+    uvicorn.run("tomo_web.web_node:app", host='0.0.0.0', port=8000, log_level='info')

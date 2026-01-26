@@ -1,39 +1,40 @@
 export const STATE_MAP = {
 
   // ---------- SOURCE ----------
+  JOY_CTRL:  { group: "source", label: "Joy Control", type: "source" },
   WEB_CTRL:  { group: "source", label: "Web Control", type: "source" },
   AUTO_CTRL: { group: "source", label: "Auto Control", type: "source" },
 
   // ---------- SAFETY ----------
   FAILSAFE:  { group: "safety", label: "Failsafe", type: "failsafe" },
-  EMERGENCY: { group: "safety", label: "EMERGENCY", type: "emergency" },
+  HARD_EMERGENCY:    { group: "safety", label: "HARD EMERGENCY", type: "emergency_hard" },
+  SOFT_EMERGENCY:    { group: "safety", label: "SOFT EMERGENCY", type: "emergency_soft" },
+  RELEASE_EMERGENCY: { group: "safety", label: "Release EMERGENCY", type: "emergency_release" },
 
-  // ---------- STATES (READ ONLY) ----------
-  ARMED: { group: "states", label: "Armed", type: "indicator" },
-  POWER: { group: "states", label: "Power Mode", type: "indicator" },
-  LIGHT: { group: "states", label: "Lights Mode", type: "indicator" },
+  // ---------- STATES ----------
+  ARMED: { group: "states", label: "Armed" },
+  POWER: { group: "states", label: "Power" },
+  LIGHT: { group: "states", label: "Lights" },
 
   // ---------- EVENTS ----------
-  ENGINE: { group: "events", label: "Start Engine" },
-  CLUTCH: { group: "events", label: "Clutch Down" },
-  SPEED:  { group: "events", label: "High Speed" },
-  MOVE:   { group: "events", label: "Move Allowed" },
+  ENGINE_START: { group: "events", label: "Engine Start" },
+  ENGINE_STOP:  { group: "events", label: "Engine Stop" },
+  CLUTCH:       { group: "events", label: "Clutch Active" },
+  BRAKE:        { group: "events", label: "Brake Active" },
+  MOVE:         { group: "events", label: "Move Allowed" },
 
   // ---------- LIGHTS ----------
   FP: { group: "lights", label: "Front Position" },
   FS: { group: "lights", label: "Front Short" },
   FL: { group: "lights", label: "Front Long" },
-  BACK: { group: "lights", label: "Back" },
+  BP: { group: "lights", label: "Back Position" },
   LB: { group: "lights", label: "Left Blink" },
   RB: { group: "lights", label: "Right Blink" },
 };
 
 export const localState = {
+  JOY_CTRL: "0",
   WEB_CTRL: "0",
   AUTO_CTRL: "0",
   FAILSAFE: "0",
-  EMERGENCY: "0",
-  ARMED: "0",
-  POWER: "0",
-  LIGHT: "0",
 };

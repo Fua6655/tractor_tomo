@@ -91,3 +91,7 @@ h2 {
 .hidden {
   display: none;
 }
+.btn.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
