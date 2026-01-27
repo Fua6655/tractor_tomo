@@ -17,6 +17,7 @@ from tomo_msgs.msg import ControlEvents, Emergency, OutputStates
 from ament_index_python.packages import get_package_share_directory
 
 UDP_PORT = 9999
+ESP_UDP_PORT = 8888
 LOG_LIMIT = 200
 
 # ==================================================
@@ -69,6 +70,7 @@ class WebRosBridge(Node):
             broadcast({
                 'type': 'output',
                 'data': {
+                    'source': msg.source,
                     'emergency': msg.emergency,
                     'armed': msg.armed_state,
                     'power': msg.power_state,
@@ -84,7 +86,6 @@ class WebRosBridge(Node):
                     'bp': msg.back_position,
                     'lb': msg.left_blink,
                     'rb': msg.right_blink,
-                    'source': msg.active_source,
                 }
             }),
             self.loop
@@ -111,6 +112,7 @@ WS_CLIENTS: set[WebSocket] = set()
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+    client_ip = ws.client.host
     WS_CLIENTS.add(ws)
     try:
         while True:
@@ -125,6 +127,11 @@ async def websocket_endpoint(ws: WebSocket):
                     data.get('level', 1),
                     'web'
                 )
+            if data['type'] == 'heartbeat':
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(b"HEARTBEAT", (client_ip, ESP_UDP_PORT))
+                sock.close()
+
 
     except WebSocketDisconnect:
         pass
@@ -148,10 +155,29 @@ def udp_listener(loop):
     while True:
         data, _ = sock.recvfrom(512)
         msg = data.decode(errors="ignore").strip()
+
+        # ---- ESP STATE ----
+        if msg.startswith("STATE,"):
+            try:
+                _, name, value = msg.split(",", 2)
+                asyncio.run_coroutine_threadsafe(
+                    broadcast({
+                        "type": "esp_state",
+                        "name": name,
+                        "value": value,
+                    }),
+                    loop
+                )
+                continue
+            except:
+                pass
+
+        # ---- LOG FALLBACK ----
         asyncio.run_coroutine_threadsafe(
             broadcast({'type': 'log', 'text': msg}),
             loop
         )
+
 
 # ==================================================
 # STARTUP

@@ -87,6 +87,13 @@ class PS4Node(Node):
             self._hold_start.pop(name, None)
         return False
 
+    def send_if_changed(self, name, category, type_, value):
+        prev = self._prev.get(name)
+        if prev == value:
+            return
+        self._prev[name] = value
+        self.send_event(category, type_, value)
+
     # ==================================================
     # MAIN CALLBACK
     # ==================================================
@@ -134,41 +141,47 @@ class PS4Node(Node):
             )
 
         # ---------- EVENTS ----------
-        self.send_event(
+        self.send_if_changed(
+            "ENGINE_START",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_START,
             int(self.ps4.Triangle_btn),
         )
 
-        self.send_event(
+        self.send_if_changed(
+            "ENGINE_STOP",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_STOP,
             int(not self.armed),
         )
 
-        self.send_event(
+        self.send_if_changed(
+            "CLUTCH",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.CLUTCH_ACTIVE,
-            int(self.ps4.R1_btn)
+            int(self.ps4.R1_btn),
         )
 
-        self.send_event(
+        self.send_if_changed(
+            "BRAKE",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.BRAKE_ACTIVE,
             int(self.ps4.L1_btn),
         )
 
         if self.hold("MOVE", self.ps4.L1_btn, self.move_hold, now):
-            self.send_event(
+            self.send_if_changed(
+                "MOVE_ALLOWED",
                 ControlEvents.CATEGORY_EVENT,
                 ControlEvents.MOVE_ALLOWED,
-                1,
+                int(self.ps4.L1_btn),
             )
         if not self.ps4.L1_btn:
-            self.send_event(
+            self.send_if_changed(
+                "MOVE_ALLOWED",
                 ControlEvents.CATEGORY_EVENT,
                 ControlEvents.MOVE_ALLOWED,
-                0,
+                int(self.ps4.L1_btn),
             )
 
         # ---------- LIGHTS ----------

@@ -25,6 +25,10 @@ class LightState(Enum):
     OFF = 0
     ON = 1
 
+class ActiveSource(Enum):
+    PS4 = ControlEvents.SOURCE_PS4
+    WEB = ControlEvents.SOURCE_WEB
+    AUTO = ControlEvents.SOURCE_AUTO
 
 # ==================================================
 # CONTROL FACTORY
@@ -43,16 +47,12 @@ class ControlFactory(Node):
         self.emergency_topic = self.get_parameter("control_emergency_topic").value
         self.output_topic = self.get_parameter("output_topic").value
 
-        # ==================================================
-        # FSM STATES
-        # ==================================================
+        self.active_source = ActiveSource.PS4
+
         self.arm_state = ArmState.DISARMED
         self.power_state = PowerState.OFF
         self.light_state = LightState.OFF
 
-        # ==================================================
-        # OUTPUT STATE
-        # ==================================================
         self.state = {
             "engine_start": False,
             "engine_stop": True,
@@ -69,7 +69,6 @@ class ControlFactory(Node):
             "right_blink": False,
         }
 
-        # FRONT LIGHT FSM
         self.front_mode = 0  # 0=OFF, 1=SHORT, 2=LONG
 
         # BLINKERS
@@ -79,13 +78,10 @@ class ControlFactory(Node):
         self.blink_period = 0.5
         self.blink_timer = self.create_timer(self.blink_period, self._blink_timer)
 
-        # ==================================================
-        # EMERGENCY
-        # ==================================================
+
         self.emergency_active = False
         self.emergency_level = 0  # 0 none, 1 soft, 2 hard
 
-        # SOFT SAVE
         self.saved_state = None
         self.saved_arm = None
         self.saved_power = None
@@ -94,7 +90,6 @@ class ControlFactory(Node):
         self.saved_blink_l = None
         self.saved_blink_r = None
 
-        # ROS
         self.create_subscription(ControlEvents, self.event_topic, self.event_cb, 50)
         self.create_subscription(Emergency, self.emergency_topic, self.emergency_cb, 10)
         self.pub_output = self.create_publisher(OutputStates, self.output_topic, 10)
@@ -153,6 +148,10 @@ class ControlFactory(Node):
         if not msg.active and self.emergency_active:
             self.get_logger().info("✅ Emergency released")
 
+            # HARD emergency release → clear engine stop
+            if self.emergency_level == Emergency.LEVEL_HARD:
+                self.state["engine_stop"] = False
+
             if self.emergency_level == Emergency.LEVEL_SOFT:
                 self._restore_soft_state()
 
@@ -168,6 +167,27 @@ class ControlFactory(Node):
 
     def event_cb(self, msg: ControlEvents):
 
+        # ---------- SYSTEM: FORCE SOURCE ----------
+        if (
+                msg.category == ControlEvents.CATEGORY_SYSTEM and
+                msg.type == ControlEvents.SYS_FORCE_SOURCE
+        ):
+            try:
+                requested = ActiveSource(msg.value)
+                if self.active_source != requested:
+                    self.active_source = requested
+                    self.get_logger().info(f"🔁 Active source set to {requested.name}")
+            except ValueError:
+                self.get_logger().warn("⚠️ Invalid source value")
+
+            self.publish()
+            return
+
+        # ---------- FILTER BY ACTIVE SOURCE ----------
+        if msg.source != self.active_source.value:
+            return
+
+        # ---------- EMERGENCY GUARDS ----------
         if self.emergency_active and self.emergency_level == Emergency.LEVEL_HARD:
             return
 
@@ -198,58 +218,163 @@ class ControlFactory(Node):
         # STATES
         if msg.category == ControlEvents.CATEGORY_STATE:
 
-            if msg.type == ControlEvents.STATE_ARMED and not msg.value:
-                self._exit_armed()
-                return
+            # ==================================================
+            # PS4 → FORCE / LEVEL BASED
+            # ==================================================
+            if msg.source == ControlEvents.SOURCE_PS4:
 
-            if msg.type == ControlEvents.STATE_POWER:
-                if msg.value:
-                    self._enter_power()
-                else:
-                    self._exit_power()
-                return
+                if msg.type == ControlEvents.STATE_ARMED:
+                    if msg.value:
+                        self._enter_armed()
+                    else:
+                        self._exit_armed()
+                    return
 
-            if msg.type == ControlEvents.STATE_LIGHT:
-                self.light_state = LightState.ON if msg.value else LightState.OFF
-                return
+                if msg.type == ControlEvents.STATE_POWER:
+                    if msg.value:
+                        self._enter_power()
+                    else:
+                        self._exit_power()
+                    return
+
+                if msg.type == ControlEvents.STATE_LIGHT:
+                    self.light_state = (
+                        LightState.ON if msg.value else LightState.OFF
+                    )
+                    return
+
+            # ==================================================
+            # WEB / AUTO → TOGGLE BASED
+            # ==================================================
+            else:
+
+                if msg.type == ControlEvents.STATE_ARMED:
+                    if self.arm_state == ArmState.DISARMED:
+                        self._enter_armed()
+                    else:
+                        self._exit_armed()
+                    return
+
+                if msg.type == ControlEvents.STATE_POWER:
+                    if self.power_state == PowerState.OFF:
+                        self._enter_power()
+                    else:
+                        self._exit_power()
+                    return
+
+                if msg.type == ControlEvents.STATE_LIGHT:
+                    self.light_state = (
+                        LightState.OFF
+                        if self.light_state == LightState.ON
+                        else LightState.ON
+                    )
+                    return
 
         # BLOCK LIGHT COMMANDS
         if msg.category == ControlEvents.CATEGORY_LIGHT and self.light_state != LightState.ON:
             return
 
-        # EVENTS (LEVEL-BASED)
+        # EVENTS
         if msg.category == ControlEvents.CATEGORY_EVENT:
 
-            if msg.type == ControlEvents.ENGINE_START:
-                self.state["engine_start"] = (
-                    bool(msg.value) and self.power_state == PowerState.ON
-                )
+            # ==================================================
+            # PS4 → LEVEL-BASED (HOLD)
+            # ==================================================
+            if msg.source == ControlEvents.SOURCE_PS4:
 
-            elif msg.type == ControlEvents.MOVE_ALLOWED:
-                self.state["move_allowed"] = bool(msg.value)
+                if msg.type == ControlEvents.ENGINE_START:
+                    self.state["engine_start"] = (
+                            bool(msg.value) and self.power_state == PowerState.ON
+                    )
 
-            elif msg.type == ControlEvents.CLUTCH_ACTIVE and self.power_state == PowerState.OFF:
-                self.state["clutch_active"] = bool(msg.value)
+                elif msg.type == ControlEvents.MOVE_ALLOWED:
+                    self.state["move_allowed"] = bool(msg.value)
 
-            elif msg.type == ControlEvents.BRAKE_ACTIVE and self.power_state == PowerState.OFF:
-                self.state["brake_active"] = bool(msg.value)
+                elif (
+                        msg.type == ControlEvents.CLUTCH_ACTIVE
+                        and self.power_state == PowerState.OFF
+                ):
+                    self.state["clutch_active"] = bool(msg.value)
+
+                elif (
+                        msg.type == ControlEvents.BRAKE_ACTIVE
+                        and self.power_state == PowerState.OFF
+                ):
+                    self.state["brake_active"] = bool(msg.value)
+
+            # ==================================================
+            # WEB / AUTO → TOGGLE (CLICK)
+            # ==================================================
+            else:
+
+                if msg.type == ControlEvents.ENGINE_START:
+                    if self.power_state == PowerState.ON:
+                        self.state["engine_start"] = not self.state["engine_start"]
+
+                elif msg.type == ControlEvents.ENGINE_STOP:
+                        self.state["engine_stop"] = not self.state["engine_stop"]
+
+                elif msg.type == ControlEvents.MOVE_ALLOWED:
+                    self.state["move_allowed"] = not self.state["move_allowed"]
+
+                elif (
+                        msg.type == ControlEvents.CLUTCH_ACTIVE
+                        and self.power_state == PowerState.OFF
+                ):
+                    self.state["clutch_active"] = not self.state["clutch_active"]
+
+                elif (
+                        msg.type == ControlEvents.BRAKE_ACTIVE
+                        and self.power_state == PowerState.OFF
+                ):
+                    self.state["brake_active"] = not self.state["brake_active"]
 
         # LIGHTS
         elif msg.category == ControlEvents.CATEGORY_LIGHT:
 
-            if msg.type == ControlEvents.FRONT_SEQUENCE_NEXT:
-                self.front_mode = (self.front_mode + 1) % 3
-                self.state["front_short"] = self.front_mode == 1
-                self.state["front_long"] = self.front_mode == 2
+            # ==================================================
+            # PS4 → SEQUENCE BASED
+            # ==================================================
+            if msg.source == ControlEvents.SOURCE_PS4:
 
-            elif msg.type == ControlEvents.BACK_POSITION:
-                self.state["back_position"] = not self.state["back_position"]
+                if msg.type == ControlEvents.FRONT_SEQUENCE_NEXT:
+                    self.front_mode = (self.front_mode + 1) % 3
 
-            elif msg.type == ControlEvents.LEFT_BLINK:
-                self.blink_left_active = not self.blink_left_active
+                    self.state["front_short"] = self.front_mode == 1
+                    self.state["front_long"] = self.front_mode == 2
 
-            elif msg.type == ControlEvents.RIGHT_BLINK:
-                self.blink_right_active = not self.blink_right_active
+                elif msg.type == ControlEvents.BACK_POSITION:
+                    self.state["back_position"] = not self.state["back_position"]
+
+                elif msg.type == ControlEvents.LEFT_BLINK:
+                    self.blink_left_active = not self.blink_left_active
+
+                elif msg.type == ControlEvents.RIGHT_BLINK:
+                    self.blink_right_active = not self.blink_right_active
+
+            # ==================================================
+            # WEB / AUTO → DIRECT TOGGLE
+            # ==================================================
+            else:
+
+                if msg.type == ControlEvents.FRONT_SHORT:
+                    self.state["front_short"] = not self.state["front_short"]
+                    if self.state["front_short"]:
+                        self.state["front_long"] = False
+
+                elif msg.type == ControlEvents.FRONT_LONG:
+                    self.state["front_long"] = not self.state["front_long"]
+                    if self.state["front_long"]:
+                        self.state["front_short"] = False
+
+                elif msg.type == ControlEvents.BACK_POSITION:
+                    self.state["back_position"] = not self.state["back_position"]
+
+                elif msg.type == ControlEvents.LEFT_BLINK:
+                    self.blink_left_active = not self.blink_left_active
+
+                elif msg.type == ControlEvents.RIGHT_BLINK:
+                    self.blink_right_active = not self.blink_right_active
 
     # ==================================================
     # FSM TRANSITIONS
@@ -353,6 +478,8 @@ class ControlFactory(Node):
 
     def publish(self):
         msg = OutputStates()
+
+        msg.source = self.active_source.value
 
         msg.armed_state = self.arm_state == ArmState.ARMED
         msg.power_state = self.power_state == PowerState.ON

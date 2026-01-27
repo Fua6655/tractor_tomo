@@ -1,21 +1,47 @@
+//tomo_web/html/ui.js
+
 import { STATE_MAP } from "./state.js";
+import { SOURCE } from "./ros_enums.js";
 
-const containers = {
-  source: document.getElementById("source"),
-  safety: document.getElementById("safety"),
-  states: document.getElementById("states"),
-  events: document.getElementById("events"),
-  lights: document.getElementById("lights"),
-};
-
-const pageWeb  = document.getElementById("page-web");
-const pageAuto = document.getElementById("page-auto");
+let containers = {};
+let pageWeb = null;
+let pageAuto = null;
 
 const buttons = {};
-let activeSource = "PS4";   // samo UI refleksija
+let activeSource = "PS4";
+let feedbackSource = "ROS";
+
+const SOURCE_TO_BUTTON = {
+  PS4: "PS4_CTRL",
+  WEB: "WEB_CTRL",
+  AUTO: "AUTO_CTRL",
+};
+
 
 // --------------------------------------------------
-export function getButton(name, meta) {
+export function initUI() {
+
+  containers = {
+    source: document.getElementById("source"),
+    feedback: document.getElementById("feedback"),
+    safety: document.getElementById("safety"),
+    states: document.getElementById("states"),
+    events: document.getElementById("events"),
+    lights: document.getElementById("lights"),
+  };
+
+  pageWeb  = document.getElementById("page-web");
+  pageAuto = document.getElementById("page-auto");
+
+  console.log("✅ UI init, containers:", containers);
+
+  Object.entries(STATE_MAP).forEach(([name, meta]) => {
+    getButton(name, meta);
+  });
+}
+
+// --------------------------------------------------
+function getButton(name, meta) {
   if (buttons[name]) return buttons[name];
 
   const btn = document.createElement("div");
@@ -27,12 +53,10 @@ export function getButton(name, meta) {
     btn.style.background = "#c62828";
     btn.style.color = "white";
   }
-
   if (meta.type === "emergency_soft") {
     btn.style.background = "#ef6c00";
     btn.style.color = "black";
   }
-
   if (meta.type === "emergency_release") {
     btn.style.background = "#2e7d32";
     btn.style.color = "white";
@@ -40,39 +64,47 @@ export function getButton(name, meta) {
 
   btn.onclick = () => {
 
-    // ---------- FAILSAFE ----------
     if (meta.type === "failsafe") return;
 
-    // ---------- HARD EMERGENCY ----------
     if (meta.type === "emergency_hard") {
       window.sendEmergency({ active: true, level: 1 });
       return;
     }
 
-    // ---------- SOFT EMERGENCY ----------
     if (meta.type === "emergency_soft") {
       window.sendEmergency({ active: true, level: 0 });
       return;
     }
 
-    // ---------- RELEASE EMERGENCY ----------
     if (meta.type === "emergency_release") {
       window.sendEmergency({ active: false });
       return;
     }
 
-    // ---------- SOURCE ----------
     if (meta.type === "source") {
       window.sendSource(meta.label.toUpperCase());
       return;
     }
 
-    // ---------- BLOCK NON-WEB CONTROLS ----------
-    if (activeSource !== "WEB") return;
+    if (meta.type === "feedback") {
+      feedbackSource = meta.label;
+      ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
+      if (buttons[k]) {
+        buttons[k].className =
+          (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
+      }
+      });
+    return;
+    }
 
-    // ---------- NORMAL EVENT / STATE ----------
+
     window.sendEvent(meta, name);
   };
+
+  if (!containers[meta.group]) {
+    console.error("❌ Missing container:", meta.group);
+    return;
+  }
 
   containers[meta.group].appendChild(btn);
   buttons[name] = btn;
@@ -81,30 +113,35 @@ export function getButton(name, meta) {
 
 // --------------------------------------------------
 export function updateSource(source) {
-  activeSource = source;
 
-  // ---------- PAGE VISIBILITY ----------
-  pageWeb.style.display  = source === "AUTO" ? "none"  : "block";
-  pageAuto.style.display = source === "AUTO" ? "block" : "none";
+  if (source === SOURCE.WEB) activeSource = "WEB";
+  else if (source === SOURCE.AUTO) activeSource = "AUTO";
+  else activeSource = "PS4";
 
-  // ---------- SOURCE BUTTON HIGHLIGHT ----------
-  ["JOY_CTRL", "WEB_CTRL", "AUTO_CTRL"].forEach((k) => {
+  pageWeb.style.display  = activeSource === "AUTO" ? "none"  : "block";
+  pageAuto.style.display = activeSource === "AUTO" ? "block" : "none";
+
+  ["PS4_CTRL", "WEB_CTRL", "AUTO_CTRL"].forEach((k) => {
     if (buttons[k]) {
-      buttons[k].className = (source === k.replace("_CTRL", "")) ? "btn on" : "btn off";
+      buttons[k].className =
+        (activeSource === k.replace("_CTRL", "")) ? "btn on" : "btn off";
     }
   });
 
-  // ---------- DISABLE NON-WEB CONTROLS ----------
   Object.entries(buttons).forEach(([name, btn]) => {
     const meta = STATE_MAP[name];
 
-    // safety & source su uvijek aktivni
-    if (meta.group === "safety" || meta.group === "source") {
+    if (
+      meta.group === "safety" ||
+      meta.group === "source" ||
+      meta.group === "feedback"
+    ) {
       btn.classList.remove("disabled");
       return;
     }
 
-    if (source !== "WEB") {
+
+    if (activeSource !== "WEB") {
       btn.classList.add("disabled");
     } else {
       btn.classList.remove("disabled");
@@ -117,15 +154,11 @@ export function updateState(name, value) {
   const btn = buttons[name];
   if (!btn) return;
 
-  // SOURCE se ne updatea preko state-a
   if (STATE_MAP[name]?.group === "source") return;
 
   btn.className = value === "1" ? "btn on" : "btn off";
 }
 
-// --------------------------------------------------
-export function initUI() {
-  Object.entries(STATE_MAP).forEach(([name, meta]) => {
-    getButton(name, meta);
-  });
+export function getFeedbackSource() {
+  return feedbackSource;
 }

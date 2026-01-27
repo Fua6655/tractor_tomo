@@ -1,4 +1,6 @@
-import { initUI, updateState, updateSource } from "./ui.js";
+//tomo_web/html/ws.js
+
+import { initUI, updateState, updateSource, getFeedbackSource } from "./ui.js";
 import { SOURCE, CATEGORY, SYSTEM } from "./ros_enums.js";
 
 const ws = new WebSocket(
@@ -9,7 +11,13 @@ const ws = new WebSocket(
 ws.onopen = () => {
   console.log("[WS] connected");
   initUI();
+
+  // ---- ESP UDP HANDSHAKE ----
+  ws.send(JSON.stringify({
+    type: "heartbeat"
+  }));
 };
+
 
 // ==================================================
 // SEND NORMAL EVENT / STATE
@@ -68,8 +76,10 @@ ws.onmessage = (e) => {
 
     const d = msg.data;
 
-    // ---- SOURCE ----
+    // ---- SOURCE always from ROS----
     updateSource(d.source);
+
+    if (getFeedbackSource() !== "ROS") return;
 
     // ---- STATES ----
     updateState("ARMED", d.armed ? "1" : "0");
@@ -78,6 +88,7 @@ ws.onmessage = (e) => {
 
     // ---- EVENTS ----
     updateState("ENGINE_START", d.engine_start ? "1" : "0");
+    updateState("ENGINE_STOP", d.engine_stop ? "1" : "0");
     updateState("CLUTCH", d.clutch ? "1" : "0");
     updateState("BRAKE", d.brake ? "1" : "0");
     updateState("MOVE", d.move ? "1" : "0");
@@ -90,4 +101,9 @@ ws.onmessage = (e) => {
     updateState("LB", d.lb ? "1" : "0");
     updateState("RB", d.rb ? "1" : "0");
   }
+
+  if (msg.type === "esp_state") {
+    if (getFeedbackSource() !== "ESP") return;
+    updateState(msg.name, msg.value);
+}
 };

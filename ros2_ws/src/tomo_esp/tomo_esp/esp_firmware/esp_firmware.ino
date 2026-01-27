@@ -80,6 +80,9 @@ void setup() {
 
   sendLog("ESP READY");
   sendState("IP", WiFi.localIP().toString());
+  Serial.print("WEB IP set to: ");
+  Serial.println(WEB_IP);
+
 }
 
 // =====================================================
@@ -187,6 +190,7 @@ void handleFailsafe() {
     allOutputsLow();
     sendState("FAILSAFE", "1");
     sendLog("FAILSAFE ON");
+    Serial.print("FAILSAFE ON");
   }
 }
 
@@ -195,6 +199,7 @@ void clearFailsafe() {
     failsafeActive = false;
     sendState("FAILSAFE", "0");
     sendLog("FAILSAFE OFF");
+    Serial.print("FAILSAFE OFF");
     publishAllStates();
   }
 }

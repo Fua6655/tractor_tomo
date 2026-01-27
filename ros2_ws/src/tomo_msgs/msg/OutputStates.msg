@@ -2,8 +2,11 @@
 # TOMO OUTPUT STATE
 # =========================
 
-# ---- METADATA ----
-string active_source    # "PS4", "WEB", "AUTO"
+# ---- SOURCE IDENTIFICATION ----
+uint8 source
+uint8 SOURCE_PS4=1
+uint8 SOURCE_WEB=2
+uint8 SOURCE_AUTO=3
 
 # ---- SYSTEM STATE ----
 bool emergency
@@ -25,6 +28,5 @@ bool front_long
 bool back_position
 bool left_blink
 bool right_blink
-
 
 builtin_interfaces/Time stamp
