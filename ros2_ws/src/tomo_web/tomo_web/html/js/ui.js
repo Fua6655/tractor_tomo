@@ -1,4 +1,4 @@
-//tomo_web/html/ui.js
+// tomo_web/html/ui.js
 
 import { STATE_MAP } from "./state.js";
 import { SOURCE } from "./ros_enums.js";
@@ -10,13 +10,13 @@ let pageAuto = null;
 const buttons = {};
 let activeSource = "PS4";
 let feedbackSource = "ROS";
+let failsafeActive = false;
 
 const SOURCE_TO_BUTTON = {
   PS4: "PS4_CTRL",
   WEB: "WEB_CTRL",
   AUTO: "AUTO_CTRL",
 };
-
 
 // --------------------------------------------------
 export function initUI() {
@@ -88,15 +88,15 @@ function getButton(name, meta) {
 
     if (meta.type === "feedback") {
       feedbackSource = meta.label;
-      ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
-      if (buttons[k]) {
-        buttons[k].className =
-          (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
-      }
-      });
-    return;
-    }
 
+      ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
+        if (buttons[k]) {
+          buttons[k].className =
+            (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
+        }
+      });
+      return;
+    }
 
     window.sendEvent(meta, name);
   };
@@ -128,25 +128,7 @@ export function updateSource(source) {
     }
   });
 
-  Object.entries(buttons).forEach(([name, btn]) => {
-    const meta = STATE_MAP[name];
-
-    if (
-      meta.group === "safety" ||
-      meta.group === "source" ||
-      meta.group === "feedback"
-    ) {
-      btn.classList.remove("disabled");
-      return;
-    }
-
-
-    if (activeSource !== "WEB") {
-      btn.classList.add("disabled");
-    } else {
-      btn.classList.remove("disabled");
-    }
-  });
+  updateControlLock();
 }
 
 // --------------------------------------------------
@@ -154,11 +136,66 @@ export function updateState(name, value) {
   const btn = buttons[name];
   if (!btn) return;
 
-  if (STATE_MAP[name]?.group === "source") return;
+  const meta = STATE_MAP[name];
+  if (!meta) return;
+
+  if (meta.group === "source") return;
+
+  // =========================
+  // FAILSAFE (APSOLUTNA ISTINA)
+  // =========================
+  if (name === "FAILSAFE") {
+    failsafeActive = value === "1";
+
+    // OFF -> zeleno
+    // ON  -> crveno
+    btn.classList.remove("on", "off");
+    btn.classList.add(failsafeActive ? "off" : "on");
+
+    updateControlLock();
+    return;
+  }
 
   btn.className = value === "1" ? "btn on" : "btn off";
 }
 
+// --------------------------------------------------
 export function getFeedbackSource() {
   return feedbackSource;
+}
+
+// --------------------------------------------------
+function updateControlLock() {
+  Object.entries(buttons).forEach(([name, btn]) => {
+    const meta = STATE_MAP[name];
+    if (!meta) return;
+
+    // OVI SU UVIJEK AKTIVNI
+    if (
+      meta.group === "source" ||
+      meta.group === "safety" ||
+      meta.group === "feedback"
+    ) {
+      btn.classList.remove("disabled");
+      return;
+    }
+
+    // =========================
+    // FAILSAFE IMA PRIORITET
+    // =========================
+    if (failsafeActive) {
+      btn.classList.add("disabled");
+      return;
+    }
+
+    // =========================
+    // NORMALNA SOURCE LOGIKA
+    // =========================
+    //if (activeSource === "WEB") {
+    //  btn.classList.remove("disabled");
+    //}
+    //else {
+    //  btn.classList.add("disabled");
+    //}
+  });
 }
