@@ -41,8 +41,17 @@ class PS4Controller:
         self.timeout = 1.0
         self.joystick_lost = False
 
+        self.deadzone = 0.1
+        self.lin = 0.0
+        self.ang = 0.0
+
     def reset(self):
         self.__init__()
+
+    def apply_deadzone(self, v: float) -> float:
+        if abs(v) < self.deadzone:
+            return 0.0
+        return v
 
     def process_joy(self, axes: List[float], buttons: List[Union[int, float]]):
         self._last_axes = list(axes)
@@ -59,6 +68,9 @@ class PS4Controller:
         self.joy_left_y = float(a(1))
         self.joy_right_x = float(a(2))
         self.joy_right_y = float(a(3))
+
+        self.lin = self.apply_deadzone(self.joy_left_y)
+        self.ang = self.apply_deadzone(self.joy_left_x)
 
         raw_L2 = a(4, 1.0)
         raw_R2 = a(5, 1.0)

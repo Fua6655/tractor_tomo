@@ -6,6 +6,7 @@ from typing import List
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Twist
 
 from tomo_msgs.msg import ControlEvents, Emergency
 from .ps4_controller import PS4Controller
@@ -17,23 +18,24 @@ class PS4Node(Node):
         super().__init__("ps4_node")
 
         # ---------------- PARAMETERS ----------------
-        self.declare_parameter("joy_topic", "/joy")
-        self.declare_parameter("control_event_topic", "/control/events")
-        self.declare_parameter("control_emergency_topic", "/control/emergency")
-
         self.declare_parameter("arm_hold_time", 2.0)
         self.declare_parameter("power_hold_time", 1.0)
         self.declare_parameter("light_hold_time", 1.0)
         self.declare_parameter("move_hold_time", 2.0)
-
-        self.joy_topic = self.get_parameter("joy_topic").value
-        self.event_topic = self.get_parameter("control_event_topic").value
-        self.emergency_topic = self.get_parameter("control_emergency_topic").value
+        self.declare_parameter("joy_topic", "/joy")
+        self.declare_parameter("control_event_topic", "/control/events")
+        self.declare_parameter("control_emergency_topic", "/control/emergency")
+        self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
 
         self.arm_hold = self.get_parameter("arm_hold_time").value
         self.power_hold = self.get_parameter("power_hold_time").value
         self.light_hold = self.get_parameter("light_hold_time").value
         self.move_hold = self.get_parameter("move_hold_time").value
+        self.joy_topic = self.get_parameter("joy_topic").value
+        self.event_topic = self.get_parameter("control_event_topic").value
+        self.emergency_topic = self.get_parameter("control_emergency_topic").value
+        self.cmd_topic = str(self.get_parameter('cmd_topic').value)
+
 
         # ---------------- CONTROLLER ----------------
         self.ps4 = PS4Controller()
@@ -52,6 +54,10 @@ class PS4Node(Node):
         )
         self.pub_emergency = self.create_publisher(
             Emergency, self.emergency_topic, 10
+        )
+
+        self.pub_cmd_vel = self.create_publisher(
+            Twist, self.cmd_topic, 30
         )
 
         self.create_subscription(Joy, self.joy_topic, self.joy_cb, 30)
@@ -94,6 +100,19 @@ class PS4Node(Node):
         self._prev[name] = value
         self.send_event(category, type_, value)
 
+    def publish_cmd_vel(self):
+        msg = Twist()
+
+        msg.linear.x = self.ps4.lin
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = self.ps4.ang
+
+        self.pub_cmd_vel.publish(msg)
+
     # ==================================================
     # MAIN CALLBACK
     # ==================================================
@@ -102,6 +121,7 @@ class PS4Node(Node):
         now = time.monotonic()
         self.ps4.process_joy(msg.axes, msg.buttons)
         self.ps4.check_timeout()
+        self.publish_cmd_vel()
 
         # ---------- EMERGENCY ----------
         if self.ps4.joystick_lost:
