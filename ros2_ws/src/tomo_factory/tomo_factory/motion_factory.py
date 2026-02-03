@@ -53,6 +53,10 @@ class MotionFactory(Node):
         self.ramp_twist = Twist()
         self.ramp_step = 0.1
 
+        self.prev_source = self.active_source
+        self.source_switching = False
+        self.switch_ramp_eps = 0.02
+
         self.prev_accel_lin = 0.0
         self.prev_accel_ang = 0.0
 
@@ -115,17 +119,36 @@ class MotionFactory(Node):
         self.brake_active = msg.brake_active
         self.move_allowed = msg.move_allowed
 
-        if msg.source == OutputStates.SOURCE_AUTO:
-            self.active_source = "AUTO"
-        else:
-            self.active_source = "PS4"
-
+        new_source = "AUTO" if msg.source == OutputStates.SOURCE_AUTO else "PS4"
+        if new_source != self.active_source:
+            self.prev_source = self.active_source
+            self.active_source = new_source
+            self.source_switching = True
 
     # ==================================================
     # CORE LOGIC
     # ==================================================
 
     def publish_muxed(self):
+        # =========================
+        # SOURCE SWITCH RAMP
+        # =========================
+        if self.source_switching:
+            zero = self.zero_twist()
+            smoothed = self.smooth_cmd(zero)
+            self.pub_cmd.publish(smoothed)
+
+            if (
+                    abs(smoothed.linear.x) < self.switch_ramp_eps and
+                    abs(smoothed.angular.z) < self.switch_ramp_eps
+            ):
+                self.source_switching = False
+                self.prev_cmd = zero
+                self.prev_accel_lin = 0.0
+                self.prev_accel_ang = 0.0
+
+            return
+
         #to do: self.engine_stop self.clutch_active self.brake_active self.move_allowed
         if self.engine_stop:
             self.publish_zero()
@@ -138,6 +161,9 @@ class MotionFactory(Node):
             self.pub_cmd.publish(smoothed)
             return
 
+        # =========================
+        # ACTIVE SOURCE
+        # =========================
         if self.active_source == "AUTO":
             src = self.last_auto_cmd
         else:
