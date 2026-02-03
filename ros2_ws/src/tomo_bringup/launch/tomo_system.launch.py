@@ -103,6 +103,33 @@ def generate_launch_description():
             }]
         ),
 
+        Node(
+            package="tomo_factory",
+            executable="motion_factory",
+            name="motion_factory",
+            output="screen",
+            parameters=[{
+                "failsafe_enabled": True,
+                "use_sim_time": False,
+                "ps4_cmd_topic": "/ps4/cmd_vel",
+                "auto_cmd_topic": "/auto/cmd_vel",
+                "output_cmd_topic": "/tomo/cmd_vel",
+                "states_topic": "/tomo/states",
+            }],
+        ),
+
+        # ================= TURTLE SIM =================
+
+        Node(
+            package='turtlesim',
+            executable='turtlesim_node',
+            name='turtlesim',
+            output='screen',
+            remappings=[
+                ('/turtle1/cmd_vel', '/tomo/cmd_vel'),
+            ]
+        ),
+
         # ================= ESP BRIDGE =================
         Node(
             package="tomo_esp",
