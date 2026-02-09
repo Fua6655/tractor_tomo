@@ -95,3 +95,15 @@ h2 {
   opacity: 0.4;
   pointer-events: none;
 }
+.panel {
+  padding: 8px;
+  margin-top: 10px;
+  border: 1px solid #333;
+}
+
+.telemetry-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: monospace;
+  margin: 4px 0;
+}

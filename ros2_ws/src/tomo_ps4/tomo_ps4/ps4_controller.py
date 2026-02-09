@@ -91,9 +91,9 @@ class PS4Controller:
         self.R2_btn = b(7)
 
         up_b = b(13)
-        right_b = b(14)
+        right_b = b(16)
         down_b = b(15)
-        left_b = b(16)
+        left_b = b(14)
         if up_b or right_b or down_b or left_b:
             self.up_btn = bool(up_b)
             self.down_btn = bool(down_b)
