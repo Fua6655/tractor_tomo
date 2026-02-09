@@ -117,7 +117,6 @@ class ControlFactory(Node):
 
             self.arm_state = armed
             self.state["front_position"] = front_pos
-            self.state["engine_stop"] = True
 
             self.publish()
             return
@@ -139,7 +138,7 @@ class ControlFactory(Node):
             self.state["clutch_active"] = False
             self.state["brake_active"] = False
             self.power_state = PowerState.OFF
-            self.state["engine_stop"] = True
+            self.state["engine_stop"] = False
 
             self.publish()
             return
@@ -446,7 +445,6 @@ class ControlFactory(Node):
         for k in self.state:
             self.state[k] = False
 
-        self.state["engine_stop"] = True
         self.front_mode = 0
         self.power_state = PowerState.OFF
         self.light_state = LightState.OFF
