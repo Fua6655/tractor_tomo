@@ -290,16 +290,10 @@ class ControlFactory(Node):
                 elif msg.type == ControlEvents.MOVE_ALLOWED:
                     self.state["move_allowed"] = bool(msg.value)
 
-                elif (
-                        msg.type == ControlEvents.CLUTCH_ACTIVE
-                        and self.power_state == PowerState.OFF
-                ):
+                elif msg.type == ControlEvents.CLUTCH_ACTIVE:
                     self.state["clutch_active"] = bool(msg.value)
 
-                elif (
-                        msg.type == ControlEvents.BRAKE_ACTIVE
-                        and self.power_state == PowerState.OFF
-                ):
+                elif msg.type == ControlEvents.BRAKE_ACTIVE:
                     self.state["brake_active"] = bool(msg.value)
 
             # ==================================================
@@ -317,16 +311,10 @@ class ControlFactory(Node):
                 elif msg.type == ControlEvents.MOVE_ALLOWED:
                     self.state["move_allowed"] = not self.state["move_allowed"]
 
-                elif (
-                        msg.type == ControlEvents.CLUTCH_ACTIVE
-                        and self.power_state == PowerState.OFF
-                ):
+                elif msg.type == ControlEvents.CLUTCH_ACTIVE:
                     self.state["clutch_active"] = not self.state["clutch_active"]
 
-                elif (
-                        msg.type == ControlEvents.BRAKE_ACTIVE
-                        and self.power_state == PowerState.OFF
-                ):
+                elif msg.type == ControlEvents.BRAKE_ACTIVE:
                     self.state["brake_active"] = not self.state["brake_active"]
 
         # LIGHTS
@@ -394,18 +382,11 @@ class ControlFactory(Node):
         if self.power_state == PowerState.ON:
             return
         self.power_state = PowerState.ON
-
-        # IMPORTANT: do NOT inherit old input
         self.state["engine_start"] = False
-
-        self.state["clutch_active"] = True
-        self.state["brake_active"] = True
 
     def _exit_power(self):
         self.power_state = PowerState.OFF
         self.state["engine_start"] = False
-        self.state["clutch_active"] = False
-        self.state["brake_active"] = False
 
     # ==================================================
     # BLINK TIMER

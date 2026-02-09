@@ -59,10 +59,32 @@ def generate_launch_description():
         )
     )
 
+    engine_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("tomo_manager"),
+                "launch",
+                "engine.launch.py",
+            )
+        )
+    )
+
+    steering_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("tomo_manager"),
+                "launch",
+                "steering.launch.py",
+            )
+        )
+    )
+
     return LaunchDescription([
         control_launch,
         motion_launch,
         ps4_launch,
         esp_launch,
-        web_launch,   # ← ako želiš web
+        web_launch,
+        engine_launch,
+        steering_launch,
     ])

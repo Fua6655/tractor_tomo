@@ -39,12 +39,7 @@ supporting **PS4 / Web / Auto** input sources and **Soft / Hard Emergency** mode
 | ON | Drivetrain enabled |
 
 **Rules:**
-- Entering `POWER ON`:
-  - `clutch_active = 1`
-  - `brake_active = 1`
-- Leaving `POWER`:
-  - `clutch_active = 0`
-  - `brake_active = 0`
+- `POWER` toggles drivetrain enable only; it does **not** force clutch/brake states.
 - `ENGINE_START` allowed **only** when `POWER ON`
 
 ---

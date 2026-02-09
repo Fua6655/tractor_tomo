@@ -28,7 +28,7 @@ bool failsafeActive = false;
 // =====================================================
 const int ENGINE_START_PIN   = 8;
 const int CLUTCH_PIN         = 9;
-const int THROTTLE_PIN       = 10;
+const int BRAKE_PIN       = 10;
 
 const int FRONT_POSITION_PIN = 2;
 const int FRONT_SHORT_PIN    = 4;
@@ -62,7 +62,7 @@ void setup() {
 
   pinMode(ENGINE_START_PIN, OUTPUT);
   pinMode(CLUTCH_PIN, OUTPUT);
-  pinMode(THROTTLE_PIN, OUTPUT);
+  pinMode(BRAKE_PIN, OUTPUT);
   pinMode(FRONT_POSITION_PIN, OUTPUT);
   pinMode(FRONT_SHORT_PIN, OUTPUT);
   pinMode(FRONT_LONG_PIN, OUTPUT);
@@ -171,7 +171,7 @@ void processOUT(const String& out) {
   // ---------- DIGITAL OUTPUTS ----------
   digitalWrite(ENGINE_START_PIN, eng_start);
   digitalWrite(CLUTCH_PIN, clutch);
-  digitalWrite(THROTTLE_PIN, brake);
+  digitalWrite(BRAKE_PIN, brake);
 
   digitalWrite(FRONT_POSITION_PIN, fp);
   digitalWrite(FRONT_SHORT_PIN, fs);
@@ -254,7 +254,7 @@ void publishAllStates() {
 void allOutputsLow() {
   digitalWrite(ENGINE_START_PIN, LOW);
   digitalWrite(CLUTCH_PIN, LOW);
-  digitalWrite(THROTTLE_PIN, LOW);
+  digitalWrite(BRAKE_PIN, LOW);
   digitalWrite(FRONT_POSITION_PIN, LOW);
   digitalWrite(FRONT_SHORT_PIN, LOW);
   digitalWrite(FRONT_LONG_PIN, LOW);
