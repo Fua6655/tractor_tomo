@@ -149,15 +149,9 @@ class MotionFactory(Node):
 
             return
 
-        #to do: self.engine_stop self.clutch_active self.brake_active self.move_allowed
-        if self.engine_stop:
-            self.publish_zero()
-            return
-
         if not self.move_allowed:
-            almost_zero = Twist()
-            almost_zero.linear.x = 0.1
-            smoothed = self.smooth_cmd(almost_zero)
+            zero = Twist()
+            smoothed = self.smooth_cmd(zero)
             self.pub_cmd.publish(smoothed)
             return
 

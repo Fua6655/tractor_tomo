@@ -167,26 +167,26 @@ class PS4Node(Node):
             ControlEvents.ENGINE_START,
             int(self.ps4.Triangle_btn),
         )
-
+        """"
         self.send_if_changed(
             "ENGINE_STOP",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.ENGINE_STOP,
             int(not self.armed),
         )
-
+        """
         self.send_if_changed(
             "CLUTCH",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.CLUTCH_ACTIVE,
-            int(self.ps4.R1_btn),
+            int(self.ps4.L1_btn),
         )
 
         self.send_if_changed(
             "BRAKE",
             ControlEvents.CATEGORY_EVENT,
             ControlEvents.BRAKE_ACTIVE,
-            int(self.ps4.L1_btn),
+            int(self.ps4.R1_btn),
         )
 
         if self.hold("MOVE", self.ps4.L1_btn, self.move_hold, now):
