@@ -22,6 +22,7 @@ class EspBridge(Node):
         self.declare_parameter("steer_cmd_topic", "/tomo/steer_cmd")
         self.declare_parameter("esp_ip", "192.168.0.187")
         self.declare_parameter("esp_port", 8888)
+        self.declare_parameter("rx_port", 0)
         self.declare_parameter("expect_ack", False)
         self.declare_parameter("heartbeat_rate", 0.5)
         self.declare_parameter("engine_watchdog_rate", 0.3)
@@ -34,6 +35,7 @@ class EspBridge(Node):
         self.steer_cmd_topic = str(self.get_parameter("steer_cmd_topic").value)
         self.esp_ip = self.get_parameter("esp_ip").value
         self.esp_port = self.get_parameter("esp_port").value
+        self.rx_port = int(self.get_parameter("rx_port").value)
         self.expect_ack = bool(self.get_parameter("expect_ack").value)
         self.heartbeat_rate = self.get_parameter("heartbeat_rate").value
         self.engine_watchdog_rate = self.get_parameter("engine_watchdog_rate").value
@@ -44,9 +46,15 @@ class EspBridge(Node):
         # ---------------- UDP ----------------
         self.tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        self.rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.rx.bind(("", self.esp_port + 1))
-        self.rx.settimeout(0.1)
+        self.rx = None
+        self.bound_rx_port = None
+        if self.expect_ack:
+            self.rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.rx.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, "SO_REUSEPORT"):
+                self.rx.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self._bind_rx_socket()
+            self.rx.settimeout(0.1)
 
         self.seq = 0
         self.pending = {}
@@ -68,8 +76,9 @@ class EspBridge(Node):
         if self.expect_ack:
             threading.Thread(target=self.rx_loop, daemon=True).start()
 
+        rx_info = f" rx={self.bound_rx_port}" if self.bound_rx_port else ""
         self.get_logger().info(
-            f"ESP bridge → {self.esp_ip}:{self.esp_port}"
+            f"ESP bridge → {self.esp_ip}:{self.esp_port}{rx_info}"
         )
 
     # ==================================================
@@ -149,6 +158,25 @@ class EspBridge(Node):
     # ==================================================
     # RX LOOP (ACK + latency)
     # ==================================================
+    def _bind_rx_socket(self):
+        base_port = self.rx_port if self.rx_port > 0 else int(self.esp_port) + 1
+        last_error = None
+        for offset in range(0, 6):
+            port = base_port + offset
+            try:
+                self.rx.bind(("", port))
+                self.bound_rx_port = port
+                if offset > 0:
+                    self.get_logger().warn(
+                        f"RX port {base_port} busy, bound to {port} instead"
+                    )
+                return
+            except OSError as exc:
+                last_error = exc
+                continue
+
+        raise last_error
+
     def rx_loop(self):
         while rclpy.ok():
             try:
