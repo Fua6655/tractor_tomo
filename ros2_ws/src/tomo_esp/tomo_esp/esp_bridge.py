@@ -22,6 +22,7 @@ class EspBridge(Node):
         self.declare_parameter("steer_cmd_topic", "/tomo/steer_cmd")
         self.declare_parameter("esp_ip", "192.168.0.187")
         self.declare_parameter("esp_port", 8888)
+        self.declare_parameter("expect_ack", False)
         self.declare_parameter("heartbeat_rate", 0.5)
         self.declare_parameter("engine_watchdog_rate", 0.3)
         self.declare_parameter("engine_timeout", 1.0)
@@ -33,6 +34,7 @@ class EspBridge(Node):
         self.steer_cmd_topic = str(self.get_parameter("steer_cmd_topic").value)
         self.esp_ip = self.get_parameter("esp_ip").value
         self.esp_port = self.get_parameter("esp_port").value
+        self.expect_ack = bool(self.get_parameter("expect_ack").value)
         self.heartbeat_rate = self.get_parameter("heartbeat_rate").value
         self.engine_watchdog_rate = self.get_parameter("engine_watchdog_rate").value
         self.engine_timeout = float(self.get_parameter("engine_timeout").value)
@@ -63,7 +65,8 @@ class EspBridge(Node):
         self.create_timer(self.engine_watchdog_rate, self.engine_watchdog)
         self.create_timer(self.steer_watchdog_rate, self.steer_watchdog)
 
-        threading.Thread(target=self.rx_loop, daemon=True).start()
+        if self.expect_ack:
+            threading.Thread(target=self.rx_loop, daemon=True).start()
 
         self.get_logger().info(
             f"ESP bridge → {self.esp_ip}:{self.esp_port}"
@@ -127,7 +130,8 @@ class EspBridge(Node):
     def send(self, payload: str):
         self.seq += 1
         msg = f"CMD,{self.seq},{payload}"
-        self.pending[self.seq] = time.time()
+        if self.expect_ack:
+            self.pending[self.seq] = time.time()
         self.tx.sendto(msg.encode(), (self.esp_ip, self.esp_port))
 
     # ==================================================
@@ -135,7 +139,8 @@ class EspBridge(Node):
     # ==================================================
     def send_heartbeat(self):
         self.seq += 1
-        self.pending[self.seq] = time.time()
+        if self.expect_ack:
+            self.pending[self.seq] = time.time()
         self.tx.sendto(
             f"HEARTBEAT,{self.seq}".encode(),
             (self.esp_ip, self.esp_port)

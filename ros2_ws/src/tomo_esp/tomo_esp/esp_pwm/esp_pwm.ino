@@ -37,6 +37,14 @@ const int STR_IN1 = 14;
 const int STR_IN2 = 15;
 
 // =====================================================
+// ================= PWM CONFIG ========================
+// =====================================================
+const int PWM_FREQ = 1000;      // Hz
+const int PWM_RES_BITS = 8;     // 0-255
+const int THR_CH = 0;
+const int STR_CH = 1;
+
+// =====================================================
 // ================= ACTUATOR STATE ====================
 // =====================================================
 float thrValue = 0.0;
@@ -65,6 +73,11 @@ void setup() {
   pinMode(STR_EN, OUTPUT);
   pinMode(STR_IN1, OUTPUT);
   pinMode(STR_IN2, OUTPUT);
+
+  ledcSetup(THR_CH, PWM_FREQ, PWM_RES_BITS);
+  ledcSetup(STR_CH, PWM_FREQ, PWM_RES_BITS);
+  ledcAttachPin(THR_EN, THR_CH);
+  ledcAttachPin(STR_EN, STR_CH);
 
   stopAllActuators();
 
@@ -155,7 +168,7 @@ void applyThrottle(float v) {
     digitalWrite(THR_IN2, LOW);
   }
 
-  analogWrite(THR_EN, pwm);
+  ledcWrite(THR_CH, pwm);
 }
 
 // =====================================================
@@ -186,7 +199,7 @@ void applySteering(float v) {
     digitalWrite(STR_IN2, LOW);
   }
 
-  analogWrite(STR_EN, pwm);
+  ledcWrite(STR_CH, pwm);
 }
 
 // =====================================================
@@ -246,8 +259,8 @@ void sendState(const String& name, const String& value) {
 // ================= UTIL ==============================
 // =====================================================
 void stopAllActuators() {
-  analogWrite(THR_EN, 0);
-  analogWrite(STR_EN, 0);
+  ledcWrite(THR_CH, 0);
+  ledcWrite(STR_CH, 0);
 
   digitalWrite(THR_IN1, LOW);
   digitalWrite(THR_IN2, LOW);

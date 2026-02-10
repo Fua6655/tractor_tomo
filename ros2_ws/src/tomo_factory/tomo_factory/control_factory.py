@@ -117,6 +117,7 @@ class ControlFactory(Node):
 
             self.arm_state = armed
             self.state["front_position"] = front_pos
+            self.state["engine_stop"] = True
 
             self.publish()
             return
@@ -460,6 +461,7 @@ class ControlFactory(Node):
 
         msg.source = self.active_source.value
 
+        msg.emergency = self.emergency_active
         msg.armed_state = self.arm_state == ArmState.ARMED
         msg.power_state = self.power_state == PowerState.ON
         msg.light_state = self.light_state == LightState.ON

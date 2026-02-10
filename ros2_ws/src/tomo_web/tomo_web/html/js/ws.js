@@ -94,8 +94,6 @@ ws.onmessage = (e) => {
     // ---- SOURCE always from ROS----
     updateSource(d.source);
 
-    if (getFeedbackSource() !== "ROS") return;
-
     // ---- STATES ----
     updateState("ARMED", d.armed ? "1" : "0");
     updateState("POWER", d.power ? "1" : "0");

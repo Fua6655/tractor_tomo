@@ -79,8 +79,9 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "control_event_topic": "/control/events",
-                "emergency_topic": "/control/emergency",
+                "control_emergency_topic": "/control/emergency",
                 "output_topic": "/tomo/states",
+                "esp_ip": esp_ip,
             }]
         ),
 
@@ -92,14 +93,8 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "control_event_topic": "/control/events",
-                "emergency_topic": "/control/emergency",
-                "ps4_cmd_vel_topic": "/ps4/cmd_vel",
-                "auto_cmd_vel_topic": "/auto/cmd_vel",
+                "control_emergency_topic": "/control/emergency",
                 "output_topic": "/tomo/states",
-                "output_cmd_topic": "/tomo/cmd_vel",
-                "ps4_timeout": 0.5,
-                "web_timeout": 1.0,
-                "auto_timeout": 0.5,
             }]
         ),
 
@@ -115,6 +110,7 @@ def generate_launch_description():
                 "auto_cmd_topic": "/auto/cmd_vel",
                 "output_cmd_topic": "/tomo/cmd_vel",
                 "states_topic": "/tomo/states",
+                "control_emergency_topic": "/control/emergency",
             }],
         ),
 
@@ -138,9 +134,15 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "output_topic": "/tomo/states",
+                "engine_cmd_topic": "/tomo/engine_cmd",
+                "steer_cmd_topic": "/tomo/steer_cmd",
                 "esp_ip": esp_ip,
                 "esp_port": esp_port,
-                "heartbeat_hz": 5.0,
+                "heartbeat_rate": 0.5,
+                "engine_watchdog_rate": 0.3,
+                "engine_timeout": 1.0,
+                "steer_watchdog_rate": 0.1,
+                "steer_timeout": 0.5,
             }]
         ),
     ])
