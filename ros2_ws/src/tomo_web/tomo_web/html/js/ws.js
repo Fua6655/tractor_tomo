@@ -1,13 +1,12 @@
-// tomo_web/html/ws.js
+//tomo_web/html/ws.js
 
 import {
   initUI,
   updateState,
   updateSource,
-  getFeedbackSource,
-  updateTelemetry
+  updateTelemetry,
+  getFeedbackSource
 } from "./ui.js";
-
 import { SOURCE, CATEGORY, SYSTEM } from "./ros_enums.js";
 
 const ws = new WebSocket(
@@ -16,26 +15,35 @@ const ws = new WebSocket(
 );
 
 ws.onopen = () => {
+  console.log("[WS] connected");
   initUI();
-  ws.send(JSON.stringify({ type: "heartbeat" }));
+  window.sendFeedbackSource(getFeedbackSource());
+
+  // ---- ESP UDP HANDSHAKE ----
+  ws.send(JSON.stringify({
+    type: "heartbeat"
+  }));
 };
 
-// --------------------------------------------------
-// SEND EVENT
-// --------------------------------------------------
+
+// ==================================================
+// SEND NORMAL EVENT / STATE
+// ==================================================
 window.sendEvent = function (meta, name) {
   ws.send(JSON.stringify({
     type: "event",
     payload: {
       source: SOURCE.WEB,
-      category: meta.category,
-      type: meta.code,
+      category: meta.category, // dolazi iz STATE_MAP
+      type: meta.code,         // dolazi iz STATE_MAP
       value: 1
     }
   }));
 };
 
-// --------------------------------------------------
+// ==================================================
+// EMERGENCY (HARD / SOFT / RELEASE)
+// ==================================================
 window.sendEmergency = function (payload) {
   ws.send(JSON.stringify({
     type: "emergency",
@@ -44,20 +52,23 @@ window.sendEmergency = function (payload) {
   }));
 };
 
-// --------------------------------------------------
+// ==================================================
+// FORCE SOURCE (OVO JE KLJUČNO)
+// ==================================================
 window.sendSource = function (label) {
 
   let value = SOURCE.PS4;
+
   if (label.includes("WEB"))  value = SOURCE.WEB;
   if (label.includes("AUTO")) value = SOURCE.AUTO;
 
   ws.send(JSON.stringify({
     type: "event",
     payload: {
-      source: SOURCE.WEB,
-      category: CATEGORY.SYSTEM,
-      type: SYSTEM.FORCE_SOURCE,
-      value: value
+      source: SOURCE.WEB,          // web šalje zahtjev
+      category: CATEGORY.SYSTEM,   // SYSTEM
+      type: SYSTEM.FORCE_SOURCE,   // FORCE SOURCE
+      value: value                // PS4 / WEB / AUTO
     }
   }));
 };
@@ -70,29 +81,34 @@ window.sendFeedbackSource = function (value) {
   }));
 };
 
-// --------------------------------------------------
-// RECEIVE
-// --------------------------------------------------
+// ==================================================
+// RECEIVE OUTPUT FROM FACTORY
+// ==================================================
 ws.onmessage = (e) => {
   const msg = JSON.parse(e.data);
 
   if (msg.type === "output") {
 
     const d = msg.data;
+
+    // ---- SOURCE always from ROS----
     updateSource(d.source);
 
     if (getFeedbackSource() !== "ROS") return;
 
+    // ---- STATES ----
     updateState("ARMED", d.armed ? "1" : "0");
     updateState("POWER", d.power ? "1" : "0");
     updateState("LIGHT", d.light ? "1" : "0");
 
+    // ---- EVENTS ----
     updateState("ENGINE_START", d.engine_start ? "1" : "0");
     updateState("ENGINE_STOP", d.engine_stop ? "1" : "0");
     updateState("CLUTCH", d.clutch ? "1" : "0");
     updateState("BRAKE", d.brake ? "1" : "0");
     updateState("MOVE", d.move ? "1" : "0");
 
+    // ---- LIGHTS ----
     updateState("FP", d.fp ? "1" : "0");
     updateState("FS", d.fs ? "1" : "0");
     updateState("FL", d.fl ? "1" : "0");
@@ -101,13 +117,15 @@ ws.onmessage = (e) => {
     updateState("RB", d.rb ? "1" : "0");
   }
 
-  // 🔥 ESP telemetry
   if (msg.type === "esp_state") {
     if (getFeedbackSource() !== "ESP") return;
-    updateTelemetry(msg.name, msg.value);
+    if (msg.name === "THR" || msg.name === "STR") {
+      updateTelemetry(msg.name, msg.value);
+    } else {
+      updateState(msg.name, msg.value);
+    }
   }
 
-  // 🔥 ROS telemetry
   if (msg.type === "ros_telemetry") {
     if (getFeedbackSource() !== "ROS") return;
     updateTelemetry(msg.name, msg.value);

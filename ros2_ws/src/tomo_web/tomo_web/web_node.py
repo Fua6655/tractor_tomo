@@ -31,12 +31,14 @@ class WebRosBridge(Node):
         self.declare_parameter("output_topic", "/tomo/states")
         self.declare_parameter("engine_cmd_topic", "/tomo/engine_cmd")
         self.declare_parameter("steer_cmd_topic", "/tomo/steer_cmd")
+        self.declare_parameter("esp_ip", "255.255.255.255")
 
         self.control_event_topic = str(self.get_parameter('control_event_topic').value)
         self.control_emergency_topic = str(self.get_parameter('control_emergency_topic').value)
         self.output_topic = str(self.get_parameter('output_topic').value)
         self.engine_cmd_topic = str(self.get_parameter('engine_cmd_topic').value)
         self.steer_cmd_topic = str(self.get_parameter('steer_cmd_topic').value)
+        self.esp_ip = str(self.get_parameter("esp_ip").value)
 
         self.loop = loop
         self.feedback_source = "ROS"
@@ -143,7 +145,6 @@ WS_CLIENTS: set[WebSocket] = set()
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    client_ip = ws.client.host
     WS_CLIENTS.add(ws)
 
     try:
@@ -166,7 +167,9 @@ async def websocket_endpoint(ws: WebSocket):
 
             if data['type'] == 'heartbeat':
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.sendto(b"HEARTBEAT", (client_ip, ESP_UDP_PORT))
+                if ros_node.esp_ip.endswith(".255") or ros_node.esp_ip == "255.255.255.255":
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.sendto(b"HEARTBEAT", (ros_node.esp_ip, ESP_UDP_PORT))
                 sock.close()
 
     except WebSocketDisconnect:

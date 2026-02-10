@@ -7,7 +7,7 @@ let containers = {};
 let pageWeb = null;
 let pageAuto = null;
 
-// 🔥 renamed from espTelemetry
+// Telemetry values for THR/STR display
 let telemetry = {
   THR: 0.0,
   STR: 0.0,
@@ -39,9 +39,20 @@ export function initUI() {
   pageWeb  = document.getElementById("page-web");
   pageAuto = document.getElementById("page-auto");
 
+  console.log("✅ UI init, containers:", containers);
+
   Object.entries(STATE_MAP).forEach(([name, meta]) => {
     getButton(name, meta);
   });
+
+  // Initialize feedback button state
+  ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
+    if (buttons[k]) {
+      buttons[k].className =
+        (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
+    }
+  });
+  updateTelemetryUI();
 }
 
 // --------------------------------------------------
@@ -52,6 +63,7 @@ function getButton(name, meta) {
   btn.className = "btn off";
   btn.textContent = meta.label;
 
+  // ----- EMERGENCY STYLES -----
   if (meta.type === "emergency_hard") {
     btn.style.background = "#c62828";
     btn.style.color = "white";
@@ -98,16 +110,18 @@ function getButton(name, meta) {
             (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
         }
       });
-
       window.sendFeedbackSource(feedbackSource);
-      updateTelemetryUI();   // 🔥 refresh immediately
+      updateTelemetryUI();
       return;
     }
 
     window.sendEvent(meta, name);
   };
 
-  if (!containers[meta.group]) return;
+  if (!containers[meta.group]) {
+    console.error("❌ Missing container:", meta.group);
+    return;
+  }
 
   containers[meta.group].appendChild(btn);
   buttons[name] = btn;
@@ -136,7 +150,6 @@ export function updateSource(source) {
 
 // --------------------------------------------------
 export function updateState(name, value) {
-
   const btn = buttons[name];
   if (!btn) return;
 
@@ -145,15 +158,27 @@ export function updateState(name, value) {
 
   if (meta.group === "source") return;
 
+  // =========================
+  // FAILSAFE (APSOLUTNA ISTINA)
+  // =========================
   if (name === "FAILSAFE") {
     failsafeActive = value === "1";
+
+    // OFF -> zeleno
+    // ON  -> crveno
     btn.classList.remove("on", "off");
     btn.classList.add(failsafeActive ? "off" : "on");
+
     updateControlLock();
     return;
   }
 
   btn.className = value === "1" ? "btn on" : "btn off";
+}
+
+// --------------------------------------------------
+export function getFeedbackSource() {
+  return feedbackSource;
 }
 
 // --------------------------------------------------
@@ -163,16 +188,12 @@ export function updateTelemetry(name, value) {
 }
 
 // --------------------------------------------------
-export function getFeedbackSource() {
-  return feedbackSource;
-}
-
-// --------------------------------------------------
 function updateControlLock() {
   Object.entries(buttons).forEach(([name, btn]) => {
     const meta = STATE_MAP[name];
     if (!meta) return;
 
+    // OVI SU UVIJEK AKTIVNI
     if (
       meta.group === "source" ||
       meta.group === "safety" ||
@@ -182,16 +203,28 @@ function updateControlLock() {
       return;
     }
 
+    // =========================
+    // FAILSAFE IMA PRIORITET
+    // =========================
     if (failsafeActive) {
       btn.classList.add("disabled");
       return;
     }
+
+    // =========================
+    // NORMALNA SOURCE LOGIKA
+    // =========================
+    //if (activeSource === "WEB") {
+    //  btn.classList.remove("disabled");
+    //}
+    //else {
+    //  btn.classList.add("disabled");
+    //}
   });
 }
 
 // --------------------------------------------------
 function updateTelemetryUI() {
-
   const thrEl = document.getElementById("thr-value");
   const strEl = document.getElementById("str-value");
   if (!thrEl || !strEl) return;
