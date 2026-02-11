@@ -2,7 +2,6 @@
 
 import { STATE_MAP } from "./state.js";
 import { SOURCE } from "./ros_enums.js";
-
 let containers = {};
 let pageWeb = null;
 let pageAuto = null;
@@ -15,21 +14,13 @@ let telemetry = {
 
 const buttons = {};
 let activeSource = "PS4";
-let feedbackSource = "ROS";
 let failsafeActive = false;
-
-const SOURCE_TO_BUTTON = {
-  PS4: "PS4_CTRL",
-  WEB: "WEB_CTRL",
-  AUTO: "AUTO_CTRL",
-};
 
 // --------------------------------------------------
 export function initUI() {
 
   containers = {
     source: document.getElementById("source"),
-    feedback: document.getElementById("feedback"),
     safety: document.getElementById("safety"),
     states: document.getElementById("states"),
     events: document.getElementById("events"),
@@ -45,13 +36,6 @@ export function initUI() {
     getButton(name, meta);
   });
 
-  // Initialize feedback button state
-  ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
-    if (buttons[k]) {
-      buttons[k].className =
-        (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
-    }
-  });
   updateTelemetryUI();
 }
 
@@ -101,20 +85,6 @@ function getButton(name, meta) {
       return;
     }
 
-    if (meta.type === "feedback") {
-      feedbackSource = meta.label;
-
-      ["FEEDBACK_ROS", "FEEDBACK_ESP"].forEach(k => {
-        if (buttons[k]) {
-          buttons[k].className =
-            (buttons[k].textContent === feedbackSource) ? "btn on" : "btn off";
-        }
-      });
-      window.sendFeedbackSource(feedbackSource);
-      updateTelemetryUI();
-      return;
-    }
-
     window.sendEvent(meta, name);
   };
 
@@ -128,6 +98,7 @@ function getButton(name, meta) {
   return btn;
 }
 
+// --------------------------------------------------
 // --------------------------------------------------
 export function updateSource(source) {
 
@@ -156,8 +127,6 @@ export function updateState(name, value) {
   const meta = STATE_MAP[name];
   if (!meta) return;
 
-  if (meta.group === "source") return;
-
   // =========================
   // FAILSAFE (APSOLUTNA ISTINA)
   // =========================
@@ -177,10 +146,6 @@ export function updateState(name, value) {
 }
 
 // --------------------------------------------------
-export function getFeedbackSource() {
-  return feedbackSource;
-}
-
 // --------------------------------------------------
 export function updateTelemetry(name, value) {
   telemetry[name] = parseFloat(value);
@@ -196,8 +161,7 @@ function updateControlLock() {
     // OVI SU UVIJEK AKTIVNI
     if (
       meta.group === "source" ||
-      meta.group === "safety" ||
-      meta.group === "feedback"
+      meta.group === "safety"
     ) {
       btn.classList.remove("disabled");
       return;
@@ -229,11 +193,6 @@ function updateTelemetryUI() {
   const strEl = document.getElementById("str-value");
   if (!thrEl || !strEl) return;
 
-  if (feedbackSource === "ESP") {
-    thrEl.textContent = telemetry.THR.toFixed(3);
-    strEl.textContent = telemetry.STR.toFixed(3);
-  } else {
-    thrEl.textContent = telemetry.THR.toFixed(6);
-    strEl.textContent = telemetry.STR.toFixed(6);
-  }
+  thrEl.textContent = telemetry.THR.toFixed(3);
+  strEl.textContent = telemetry.STR.toFixed(3);
 }

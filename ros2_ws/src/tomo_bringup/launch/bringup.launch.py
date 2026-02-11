@@ -126,23 +126,4 @@ def generate_launch_description():
             ]
         ),
 
-        # ================= ESP BRIDGE =================
-        Node(
-            package="tomo_esp",
-            executable="esp_bridge",
-            name="tomo_esp",
-            output="screen",
-            parameters=[{
-                "output_topic": "/tomo/states",
-                "engine_cmd_topic": "/tomo/engine_cmd",
-                "steer_cmd_topic": "/tomo/steer_cmd",
-                "esp_ip": esp_ip,
-                "esp_port": esp_port,
-                "heartbeat_rate": 0.5,
-                "engine_watchdog_rate": 0.3,
-                "engine_timeout": 1.0,
-                "steer_watchdog_rate": 0.1,
-                "steer_timeout": 0.5,
-            }]
-        ),
     ])

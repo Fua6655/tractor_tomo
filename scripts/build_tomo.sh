@@ -14,10 +14,3 @@ colcon build
 		# --symlink-install
 		# --packages-select tomo_auto tomo_bringup tomo_esp tomo_factory tomo_msgs tomo_ps4 tomo_web
 		# --event-handlers console_direct+
-
-echo "🌍 Sourcing workspace"
-source install/setup.bash
-
-echo "🚜 Launching TOMO"
-ros2 launch tomo_bringup tomo_system.launch.py
-

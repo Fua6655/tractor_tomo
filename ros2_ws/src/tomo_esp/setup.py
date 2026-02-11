@@ -14,6 +14,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'),
             glob('launch/*.launch.py')),
+        (os.path.join('share', package_name, 'scripts'),
+            glob('scripts/*.sh')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,7 +30,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'esp_bridge = tomo_esp.esp_bridge:main',
         ],
     },
 )

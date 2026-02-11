@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
-import socket
 import threading
+import time
 from importlib.resources import files
 
 from fastapi import FastAPI, WebSocket
@@ -11,12 +11,9 @@ from starlette.websockets import WebSocketDisconnect
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Bool
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from tomo_msgs.msg import ControlEvents, Emergency, OutputStates
-
-UDP_PORT = 9999
-ESP_UDP_PORT = 8888
-LOG_LIMIT = 200
 
 
 # ==================================================
@@ -31,17 +28,20 @@ class WebRosBridge(Node):
         self.declare_parameter("output_topic", "/tomo/states")
         self.declare_parameter("engine_cmd_topic", "/tomo/engine_cmd")
         self.declare_parameter("steer_cmd_topic", "/tomo/steer_cmd")
-        self.declare_parameter("esp_ip", "255.255.255.255")
+        self.declare_parameter("esp_alive_topic", "/tomo/esp_alive")
+        self.declare_parameter("esp_alive_timeout", 1.5)
 
         self.control_event_topic = str(self.get_parameter('control_event_topic').value)
         self.control_emergency_topic = str(self.get_parameter('control_emergency_topic').value)
         self.output_topic = str(self.get_parameter('output_topic').value)
         self.engine_cmd_topic = str(self.get_parameter('engine_cmd_topic').value)
         self.steer_cmd_topic = str(self.get_parameter('steer_cmd_topic').value)
-        self.esp_ip = str(self.get_parameter("esp_ip").value)
+        self.esp_alive_topic = str(self.get_parameter("esp_alive_topic").value)
+        self.esp_alive_timeout = float(self.get_parameter("esp_alive_timeout").value)
 
         self.loop = loop
-        self.feedback_source = "ROS"
+        self.last_esp_alive = 0.0
+        self.esp_failsafe = None
 
         # -------- PUBLISHERS --------
         self.pub_event = self.create_publisher(ControlEvents, self.control_event_topic, 50)
@@ -51,6 +51,11 @@ class WebRosBridge(Node):
         self.create_subscription(OutputStates, self.output_topic, self.output_cb, 20)
         self.create_subscription(Float32, self.engine_cmd_topic, self.engine_cmd_cb, 20)
         self.create_subscription(Float32, self.steer_cmd_topic, self.steer_cmd_cb, 20)
+
+        esp_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self.create_subscription(Bool, self.esp_alive_topic, self.esp_alive_cb, esp_qos)
+
+        self.create_timer(0.5, self.esp_alive_watchdog)
 
     # ---------- SEND CONTROL EVENT ----------
     def send_event(self, payload: dict):
@@ -98,9 +103,6 @@ class WebRosBridge(Node):
         )
 
     def engine_cmd_cb(self, msg: Float32):
-        if self.feedback_source != "ROS":
-            return
-
         asyncio.run_coroutine_threadsafe(
             broadcast({
                 "type": "ros_telemetry",
@@ -111,14 +113,31 @@ class WebRosBridge(Node):
         )
 
     def steer_cmd_cb(self, msg: Float32):
-        if self.feedback_source != "ROS":
-            return
-
         asyncio.run_coroutine_threadsafe(
             broadcast({
                 "type": "ros_telemetry",
                 "name": "STR",
                 "value": msg.data,
+            }),
+            self.loop
+        )
+
+    def esp_alive_cb(self, msg: Bool):
+        if msg.data:
+            self.last_esp_alive = time.time()
+
+    def esp_alive_watchdog(self):
+        now = time.time()
+        alive = (now - self.last_esp_alive) <= self.esp_alive_timeout
+        failsafe = not alive
+        if self.esp_failsafe is not None and failsafe == self.esp_failsafe:
+            return
+        self.esp_failsafe = failsafe
+        asyncio.run_coroutine_threadsafe(
+            broadcast({
+                "type": "esp_state",
+                "name": "FAILSAFE",
+                "value": "1" if failsafe else "0",
             }),
             self.loop
         )
@@ -151,10 +170,6 @@ async def websocket_endpoint(ws: WebSocket):
         while True:
             data = await ws.receive_json()
 
-            if data['type'] == 'feedback_source':
-                ros_node.feedback_source = data['value']
-                continue
-
             if data['type'] == 'event':
                 ros_node.send_event(data['payload'])
 
@@ -164,13 +179,6 @@ async def websocket_endpoint(ws: WebSocket):
                     data.get('level', 1),
                     'web'
                 )
-
-            if data['type'] == 'heartbeat':
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                if ros_node.esp_ip.endswith(".255") or ros_node.esp_ip == "255.255.255.255":
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                sock.sendto(b"HEARTBEAT", (ros_node.esp_ip, ESP_UDP_PORT))
-                sock.close()
 
     except WebSocketDisconnect:
         pass
@@ -186,35 +194,6 @@ async def broadcast(payload: dict):
             WS_CLIENTS.discard(ws)
 
 
-def udp_listener(loop):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("0.0.0.0", UDP_PORT))
-
-    while True:
-        data, _ = sock.recvfrom(512)
-        msg = data.decode(errors="ignore").strip()
-
-        if msg.startswith("STATE,"):
-            try:
-                _, name, value = msg.split(",", 2)
-                asyncio.run_coroutine_threadsafe(
-                    broadcast({
-                        "type": "esp_state",
-                        "name": name,
-                        "value": value,
-                    }),
-                    loop
-                )
-                continue
-            except:
-                pass
-
-        asyncio.run_coroutine_threadsafe(
-            broadcast({'type': 'log', 'text': msg}),
-            loop
-        )
-
-
 @app.on_event("startup")
 async def startup():
     global ros_node
@@ -225,10 +204,6 @@ async def startup():
 
     threading.Thread(
         target=rclpy.spin, args=(ros_node,), daemon=True
-    ).start()
-
-    threading.Thread(
-        target=udp_listener, args=(loop,), daemon=True
     ).start()
 
 

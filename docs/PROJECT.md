@@ -1,9 +1,8 @@
 # TOMO Control System — Project Documentation
 
-This repository contains a ROS 2 workspace (`ros2_ws`) for a tractor/vehicle control
-system. The core design is a centralized event-based state machine (ControlFactory)
-that turns input events (PS4/Web/Auto) into output states for the vehicle and ESP
-firmware. The rest of the packages are sources, managers, and bridges.
+This repository contains a ROS 2 workspace (`ros2_ws`) for a tractor/vehicle control system.
+The core is an event-based state machine (ControlFactory) that converts input events
+(PS4/Web/Auto) into output states and commands for ESP32.
 
 ---
 
@@ -14,91 +13,55 @@ firmware. The rest of the packages are sources, managers, and bridges.
   - `src/tomo_manager/` — EngineManager + SteeringManager (low-level outputs)
   - `src/tomo_ps4/` — PS4 input node (events + cmd_vel)
   - `src/tomo_web/` — Web UI + ROS bridge (FastAPI + WebSocket)
-  - `src/tomo_esp/` — UDP bridge to ESP firmware
-  - `src/tomo_msgs/` — Custom ROS 2 message definitions
-  - `src/tomo_bringup/` — Launch files (system bringup)
-  - `src/tomo_auto/` — Placeholder package for autonomy input
-- `images/` — System and UI screenshots
+  - `src/tomo_esp/` — micro-ROS agent (Docker) + ESP32 firmware
+  - `src/tomo_msgs/` — custom ROS 2 message definitions
+  - `src/tomo_bringup/` — launch files
+  - `src/tomo_auto/` — placeholder for autonomy (development just started)
+- `images/` — system images/diagrams
+- `docs/` — project documentation
 
 ---
 
-## Packages and Responsibilities
+## Versions
+
+- **v1.3**: final version for phase 1
+  - `tomo_factory`, `tomo_manager`, `tomo_ps4`, `tomo_web`, `tomo_esp`, `tomo_msgs`, `tomo_bringup`
+- **tomo_auto**: not part of v1.3, development just started
+
+---
+
+## Packages (short)
 
 ### `tomo_factory`
-Central logic and safety layer.
-
-- `control_factory.py`
-  - Consumes `/control/events` and `/control/emergency`
-  - Maintains FSM (arm, power, light)
-  - Publishes `/tomo/states` (OutputStates)
-  - Handles blink logic, emergency override, and source arbitration
-
-- `motion_factory.py`
-  - Muxes `/ps4/cmd_vel` and `/auto/cmd_vel`
-  - Applies accel/jerk limits
-  - Publishes `/tomo/cmd_vel`
-  - Emergency handling: hard = instant zero, soft = ramp down
+- Reducer + FSM (armed/power/light, emergency)
+- Publishes `OutputStates`
+- Motion mux + accel/jerk limiting
 
 ### `tomo_manager`
-Low-level managers derived from `/tomo/cmd_vel` and `/tomo/states`.
-
-- `engine_manager.py`
-  - Publishes `/tomo/engine_cmd` (Float32 throttle 0..1)
-  - Behavior depends on `engine_start`, `engine_stop`, `move_allowed`
-
-- `steering_manager.py`
-  - Publishes `/tomo/steer_cmd` (Float32 -1..1)
-  - Deadzone, soft limits, max rate, timeout handling
-  - Emergency -> steer to zero
+- `engine_manager` -> `/tomo/engine_cmd`
+- `steering_manager` -> `/tomo/steer_cmd`
 
 ### `tomo_ps4`
-PS4 input handling and mapping to events.
-
-- `ps4_node.py`
-  - Reads `/joy` and publishes:
-    - `/control/events` (ControlEvents)
-    - `/control/emergency` (Emergency)
-    - `/ps4/cmd_vel` (Twist)
+- PS4 -> `ControlEvents` + `/ps4/cmd_vel`
+- Timeout => HARD emergency
 
 ### `tomo_web`
-Web UI and ROS bridge.
-
-- `web_node.py`
-  - FastAPI server + WebSocket at `/ws`
-  - Publishes `/control/events` and `/control/emergency`
-  - Subscribes `/tomo/states`, `/tomo/engine_cmd`, `/tomo/steer_cmd`
-  - UDP listener on 9999 for ESP telemetry/logs
-  - Serves static UI from `tomo_web/html/index.html`
+- FastAPI server + WebSocket
+- Sends `ControlEvents` + displays state
 
 ### `tomo_esp`
-UDP bridge to ESP32 firmware.
-
-- `esp_bridge.py`
-  - Sends `OUT`, `THR`, `STR` payloads over UDP
-  - Heartbeat + ACK latency tracking
-  - Engine/steer watchdogs for timeout-to-zero
+- Docker micro-ROS agent
+- ESP32 firmware (`esp_microros.ino`) drives GPIO
 
 ### `tomo_msgs`
-Custom messages used across the system.
-
-- `ControlEvents.msg`
-  - Source: PS4 / WEB / AUTO
-  - Category: STATE / EVENT / LIGHT / SYSTEM
-  - Type: specific action (armed, engine_start, blinkers, etc)
-  - Value: int (toggle/force)
-
-- `OutputStates.msg`
-  - Aggregated system state for outputs and UI
-
-- `Emergency.msg`
-  - `active`, `level`, `reason`
+- `ControlEvents`, `OutputStates`, `Emergency`
 
 ### `tomo_bringup`
-Launch files for entire system or subsets.
+- Launch files for full or partial bringup
 
 ---
 
-## ROS Topics (Core)
+## ROS Topics (core)
 
 Input:
 - `/control/events` (tomo_msgs/ControlEvents)
@@ -112,11 +75,7 @@ Outputs:
 - `/tomo/cmd_vel` (geometry_msgs/Twist)
 - `/tomo/engine_cmd` (std_msgs/Float32)
 - `/tomo/steer_cmd` (std_msgs/Float32)
-
-Networking:
-- UDP tx to ESP: `esp_ip:esp_port` (default 192.168.0.187:8888)
-- UDP rx from ESP: port `esp_port + 1` (default 8889)
-- Web UDP listener: port `9999` (for telemetry/logs)
+- `/tomo/esp_alive` (std_msgs/Bool)
 
 ---
 
@@ -130,73 +89,44 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-Launch full bringup (PS4 + web + control + motion + managers + ESP):
+Full bringup (PS4 + web + control + motion + managers):
 
 ```bash
-ros2 launch tomo_bringup bringup.launch.py
+ros2 launch tomo_bringup tomo_system.launch.py
 ```
 
-Or launch individual stacks:
+Individual launches:
 
 ```bash
 ros2 launch tomo_factory control.launch.py
 ros2 launch tomo_factory motion.launch.py
 ros2 launch tomo_ps4 ps4.launch.py
-ros2 launch tomo_esp esp.launch.py
 ros2 launch tomo_web web.launch.py
 ros2 launch tomo_manager engine.launch.py
 ros2 launch tomo_manager steering.launch.py
+ros2 launch tomo_esp micro_ros_agent.launch.py
 ```
 
-Start the web UI service:
+Web UI:
 
 ```bash
 ros2 run tomo_web web_node
-# then open in browser:
-# http://localhost:8000/
+# open in browser: http://localhost:8000/
 ```
 
 ---
 
-## Parameters (Selected)
+## micro-ROS agent (Docker)
 
-### ControlFactory
-- `control_event_topic` (default `/control/events`)
-- `control_emergency_topic` (default `/control/emergency`)
-- `output_topic` (default `/tomo/states`)
+```bash
+ros2 launch tomo_esp micro_ros_agent.launch.py port:=8888
+```
 
-### MotionFactory
-- `ps4_cmd_topic`, `auto_cmd_topic`, `output_cmd_topic`, `states_topic`
-- `failsafe_enabled` (bool)
-- `control_rate`, `max_lin_accel`, `max_ang_accel`, `max_lin_jerk`, `max_ang_jerk`
-
-### EngineManager
-- `idle_throttle` (default 0.15)
-- `start_throttle` (default 0.9)
-
-### SteeringManager
-- `max_angle_deg`, `soft_limit_margin_deg`, `deadzone`
-- `cmd_timeout`, `max_steer_rate`, `control_rate`
-
-### EspBridge
-- `esp_ip`, `esp_port`
-- `heartbeat_rate`, `engine_watchdog_rate`, `engine_timeout`
-- `steer_watchdog_rate`, `steer_timeout`
+- Runs `microros/micro-ros-agent:iron` in Docker.
+- ESP32 firmware uses WiFi transport and configuration from `esp_microros.ino`.
 
 ---
 
-## Data Flow (High Level)
+## More detail
 
-1. PS4 / Web / Auto publish ControlEvents
-2. ControlFactory reduces to OutputStates
-3. MotionFactory muxes cmd_vel to `/tomo/cmd_vel`
-4. EngineManager + SteeringManager convert to `/tomo/engine_cmd` + `/tomo/steer_cmd`
-5. EspBridge sends UDP packets to ESP firmware
-
----
-
-## Notes for Development
-
-- `ros2_ws/build` and `ros2_ws/install` are generated artifacts.
-- `tomo_auto` is currently a placeholder; you can add an autonomy node that publishes
-  `ControlEvents` and `/auto/cmd_vel`.
+- Each package has its own `README.md` inside its folder.

@@ -39,26 +39,6 @@ def generate_launch_description():
         )
     )
 
-    esp_front_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("tomo_esp"),
-                "launch",
-                "esp_front.launch.py",
-            )
-        )
-    )
-
-    esp_back_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory("tomo_esp"),
-                "launch",
-                "esp_back.launch.py",
-            )
-        )
-    )
-
     web_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -93,8 +73,6 @@ def generate_launch_description():
         control_launch,
         motion_launch,
         ps4_launch,
-        esp_front_launch,
-        esp_back_launch,
         web_launch,
         engine_launch,
         steering_launch,

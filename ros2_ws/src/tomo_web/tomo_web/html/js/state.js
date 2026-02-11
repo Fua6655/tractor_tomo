@@ -8,10 +8,6 @@ export const STATE_MAP = {
   WEB_CTRL:  { group: "source", label: "WEB", type: "source", category: CATEGORY.SYSTEM, code: SYSTEM.FORCE_SOURCE, value: SOURCE.WEB },
   AUTO_CTRL: { group: "source", label: "AUTO", type: "source", category: CATEGORY.SYSTEM, code: SYSTEM.FORCE_SOURCE, value: SOURCE.AUTO },
 
-  // ---------- FEEDBACK SOURCE ----------
-  FEEDBACK_ROS:  { group: "feedback", label: "ROS", type: "feedback" },
-  FEEDBACK_ESP:  { group: "feedback", label: "ESP", type: "feedback" },
-
   // ---------- SAFETY ----------
   FAILSAFE:  { group: "safety", label: "Failsafe", type: "failsafe" },
   HARD_EMERGENCY:    { group: "safety", label: "HARD EMERGENCY", type: "emergency_hard" },

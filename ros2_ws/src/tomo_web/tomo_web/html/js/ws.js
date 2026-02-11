@@ -4,8 +4,7 @@ import {
   initUI,
   updateState,
   updateSource,
-  updateTelemetry,
-  getFeedbackSource
+  updateTelemetry
 } from "./ui.js";
 import { SOURCE, CATEGORY, SYSTEM } from "./ros_enums.js";
 
@@ -17,12 +16,6 @@ const ws = new WebSocket(
 ws.onopen = () => {
   console.log("[WS] connected");
   initUI();
-  window.sendFeedbackSource(getFeedbackSource());
-
-  // ---- ESP UDP HANDSHAKE ----
-  ws.send(JSON.stringify({
-    type: "heartbeat"
-  }));
 };
 
 
@@ -53,7 +46,7 @@ window.sendEmergency = function (payload) {
 };
 
 // ==================================================
-// FORCE SOURCE (OVO JE KLJUČNO)
+// FORCE SOURCE
 // ==================================================
 window.sendSource = function (label) {
 
@@ -65,19 +58,11 @@ window.sendSource = function (label) {
   ws.send(JSON.stringify({
     type: "event",
     payload: {
-      source: SOURCE.WEB,          // web šalje zahtjev
-      category: CATEGORY.SYSTEM,   // SYSTEM
-      type: SYSTEM.FORCE_SOURCE,   // FORCE SOURCE
-      value: value                // PS4 / WEB / AUTO
+      source: SOURCE.WEB,
+      category: CATEGORY.SYSTEM,
+      type: SYSTEM.FORCE_SOURCE,
+      value: value
     }
-  }));
-};
-
-// --------------------------------------------------
-window.sendFeedbackSource = function (value) {
-  ws.send(JSON.stringify({
-    type: "feedback_source",
-    value: value
   }));
 };
 
@@ -116,16 +101,10 @@ ws.onmessage = (e) => {
   }
 
   if (msg.type === "esp_state") {
-    if (getFeedbackSource() !== "ESP") return;
-    if (msg.name === "THR" || msg.name === "STR") {
-      updateTelemetry(msg.name, msg.value);
-    } else {
-      updateState(msg.name, msg.value);
-    }
+    updateState(msg.name, msg.value);
   }
 
   if (msg.type === "ros_telemetry") {
-    if (getFeedbackSource() !== "ROS") return;
     updateTelemetry(msg.name, msg.value);
   }
 };
