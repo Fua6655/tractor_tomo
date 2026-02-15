@@ -23,26 +23,27 @@ const uint16_t AGENT_PORT = 8888;
 // =====================================================
 // ================= GPIO ==============================
 // =====================================================
-const int ENGINE_START_PIN = 4;
-const int CLUTCH_PIN = 5;
-const int BRAKE_PIN = 6;
+const int ENGINE_START_PIN = 40;
+const int CLUTCH_PIN = 41;
+const int BRAKE_PIN = 42;
 
-const int FRONT_POSITION_PIN = 7;
-const int FRONT_SHORT_PIN = 8;
-const int FRONT_LONG_PIN = 9;
-const int BACK_POSITION_PIN = 10;
-const int LEFT_BLINK_PIN = 11;
-const int RIGHT_BLINK_PIN = 12;
+const int FRONT_POSITION_PIN = 15;
+const int FRONT_SHORT_PIN = 16;
+const int FRONT_LONG_PIN = 17;
+
+const int BACK_POSITION_PIN = 9;
+const int LEFT_BLINK_PIN = 10;
+const int RIGHT_BLINK_PIN = 11;
 
 // ---- THROTTLE ----
-const int THR_EN = 13;   // PWM
-const int THR_IN1 = 14;
-const int THR_IN2 = 15;
+const int THR_EN = 4;   // PWM
+const int THR_IN1 = 5;
+const int THR_IN2 = 6;
 
 // ---- STEERING ----
-const int STR_EN = 16;   // PWM
-const int STR_IN1 = 17;
-const int STR_IN2 = 18;
+const int STR_EN = 12;   // PWM
+const int STR_IN1 = 13;
+const int STR_IN2 = 14;
 
 // =====================================================
 // ================= PWM CONFIG ========================

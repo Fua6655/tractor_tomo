@@ -20,19 +20,19 @@ Publishers:
 
 ## Hardware pinout (from `esp_microros.ino`)
 Digital outputs:
-- `ENGINE_START_PIN = 4`
-- `CLUTCH_PIN = 5`
-- `BRAKE_PIN = 6`
-- `FRONT_POSITION_PIN = 7`
-- `FRONT_SHORT_PIN = 8`
-- `FRONT_LONG_PIN = 9`
-- `BACK_POSITION_PIN = 10`
-- `LEFT_BLINK_PIN = 11`
-- `RIGHT_BLINK_PIN = 12`
+- `ENGINE_START_PIN = 40`
+- `CLUTCH_PIN = 41`
+- `BRAKE_PIN = 42`
+- `FRONT_POSITION_PIN = 15`
+- `FRONT_SHORT_PIN = 16`
+- `FRONT_LONG_PIN = 17`
+- `BACK_POSITION_PIN = 9`
+- `LEFT_BLINK_PIN = 10`
+- `RIGHT_BLINK_PIN = 11`
 
 PWM + direction:
-- Throttle: `THR_EN = 13` (PWM), `THR_IN1 = 14`, `THR_IN2 = 15`
-- Steering: `STR_EN = 16` (PWM), `STR_IN1 = 17`, `STR_IN2 = 18`
+- Throttle: `THR_EN = 4` (PWM), `THR_IN1 = 5`, `THR_IN2 = 6`
+- Steering: `STR_EN = 12` (PWM), `STR_IN1 = 13`, `STR_IN2 = 14`
 
 PWM config:
 - `PWM_FREQ = 1000` Hz

@@ -14,7 +14,7 @@ def generate_launch_description():
                     "states_topic": "/tomo/states",
                     "cmd_topic": "/tomo/cmd_vel",
                     "engine_cmd_topic": "/tomo/engine_cmd",
-                    "idle_throttle": 0.15,
+                    "idle_throttle": 0.0,
                     "start_throttle": 0.9,
                 }
             ],
