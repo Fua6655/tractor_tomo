@@ -11,15 +11,15 @@ export const SOURCE = {
 export const CATEGORY = {
   STATE: 1,
   EVENT: 2,
-  LIGHT: 3,
+  SIGNALIZATION: 3,
   SYSTEM: 4,
 };
 
 // ---------- STATE ----------
 export const STATE = {
   ARMED: 1,
-  POWER: 2,
-  LIGHT: 3,
+  ENGINE: 2,
+  SIGNALIZATION: 3,
 };
 
 // ---------- EVENT ----------
@@ -31,8 +31,8 @@ export const EVENT = {
   MOVE_ALLOWED: 14,
 };
 
-// ---------- LIGHT ----------
-export const LIGHT = {
+// ---------- SIGNALIZATION ----------
+export const SIGNALIZATION = {
   FRONT_POSITION: 20,
   FRONT_SEQUENCE_NEXT: 21,
   FRONT_SHORT: 22,
@@ -40,6 +40,7 @@ export const LIGHT = {
   BACK_POSITION: 24,
   LEFT_BLINK: 25,
   RIGHT_BLINK: 26,
+  HORN: 27,
 };
 
 // ---------- SYSTEM ----------

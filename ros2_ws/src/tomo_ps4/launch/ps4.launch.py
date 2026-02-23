@@ -42,8 +42,8 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "arm_hold_time": 2.0,
-                "power_hold_time": 1.0,
-                "light_hold_time": 1.0,
+                "engine_hold_time": 1.0,
+                "signalization_hold_time": 1.0,
                 "move_hold_time": 2.0,
                 "joy_topic": "/joy",
                 "control_event_topic": "/control/events",

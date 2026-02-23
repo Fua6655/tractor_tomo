@@ -19,8 +19,8 @@ class PS4Node(Node):
 
         # ---------------- PARAMETERS ----------------
         self.declare_parameter("arm_hold_time", 2.0)
-        self.declare_parameter("power_hold_time", 1.0)
-        self.declare_parameter("light_hold_time", 1.0)
+        self.declare_parameter("engine_hold_time", 1.0)
+        self.declare_parameter("signalization_hold_time", 1.0)
         self.declare_parameter("move_hold_time", 2.0)
         self.declare_parameter("joy_topic", "/joy")
         self.declare_parameter("control_event_topic", "/control/events")
@@ -28,8 +28,8 @@ class PS4Node(Node):
         self.declare_parameter('cmd_topic', '/ps4/cmd_vel')
 
         self.arm_hold = self.get_parameter("arm_hold_time").value
-        self.power_hold = self.get_parameter("power_hold_time").value
-        self.light_hold = self.get_parameter("light_hold_time").value
+        self.engine_hold = self.get_parameter("engine_hold_time").value
+        self.signalization_hold = self.get_parameter("signalization_hold_time").value
         self.move_hold = self.get_parameter("move_hold_time").value
         self.joy_topic = self.get_parameter("joy_topic").value
         self.event_topic = self.get_parameter("control_event_topic").value
@@ -42,8 +42,8 @@ class PS4Node(Node):
 
         # ---------------- STATE ----------------
         self.armed = False
-        self.power = False
-        self.light = False
+        self.engine = False
+        self.signalization = False
 
         self._hold_start = {}
         self._prev = {}
@@ -142,22 +142,22 @@ class PS4Node(Node):
                 int(self.armed),
             )
 
-        # ---------- POWER ----------
-        if self.hold("O", self.ps4.O_btn, self.power_hold, now):
-            self.power = not self.power
+        # ---------- ENGINE ----------
+        if self.hold("O", self.ps4.O_btn, self.engine_hold, now):
+            self.engine = not self.engine
             self.send_event(
                 ControlEvents.CATEGORY_STATE,
-                ControlEvents.STATE_POWER,
-                int(self.power),
+                ControlEvents.STATE_ENGINE,
+                int(self.engine),
             )
 
-        # ---------- LIGHT MODE ----------
-        if self.hold("SQ", self.ps4.Square_btn, self.light_hold, now):
-            self.light = not self.light
+        # ---------- SIGNALIZATION MODE ----------
+        if self.hold("SQ", self.ps4.Square_btn, self.signalization_hold, now):
+            self.signalization = not self.signalization
             self.send_event(
                 ControlEvents.CATEGORY_STATE,
-                ControlEvents.STATE_LIGHT,
-                int(self.light),
+                ControlEvents.STATE_SIGNALIZATION,
+                int(self.signalization),
             )
 
         # ---------- EVENTS ----------
@@ -204,39 +204,46 @@ class PS4Node(Node):
                 int(self.ps4.L1_btn),
             )
 
-        # ---------- LIGHTS ----------
+        # ---------- SIGNALIZATION ----------
         if self.edge("ARMED_FP", self.armed):
             self.send_event(
-                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.CATEGORY_SIGNALIZATION,
                 ControlEvents.FRONT_POSITION,
                 int(self.armed),
             )
 
-        if self.light and self.edge("UP", self.ps4.up_btn):
+        if self.signalization and self.edge("UP", self.ps4.up_btn):
             self.send_event(
-                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.CATEGORY_SIGNALIZATION,
                 ControlEvents.FRONT_SEQUENCE_NEXT,
                 1,
             )
 
-        if self.light and self.edge("DOWN", self.ps4.down_btn):
+        if self.signalization and self.edge("DOWN", self.ps4.down_btn):
             self.send_event(
-                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.CATEGORY_SIGNALIZATION,
                 ControlEvents.BACK_POSITION,
                 1,
             )
 
-        if self.light and self.edge("LEFT", self.ps4.left_btn):
+        if self.signalization and self.edge("LEFT", self.ps4.left_btn):
             self.send_event(
-                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.CATEGORY_SIGNALIZATION,
                 ControlEvents.LEFT_BLINK,
                 1,
             )
 
-        if self.light and self.edge("RIGHT", self.ps4.right_btn):
+        if self.signalization and self.edge("RIGHT", self.ps4.right_btn):
             self.send_event(
-                ControlEvents.CATEGORY_LIGHT,
+                ControlEvents.CATEGORY_SIGNALIZATION,
                 ControlEvents.RIGHT_BLINK,
+                1,
+            )
+
+        if self.signalization and not self.engine and self.edge("HORN", self.ps4.Triangle_btn):
+            self.send_event(
+                ControlEvents.CATEGORY_SIGNALIZATION,
+                ControlEvents.HORN,
                 1,
             )
 

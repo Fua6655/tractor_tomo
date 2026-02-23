@@ -10,18 +10,18 @@ uint8 SOURCE_AUTO=3
 
 # ---- EVENT CATEGORY ----
 uint8 category
-uint8 CATEGORY_STATE=1        # armed, power, light
-uint8 CATEGORY_EVENT=2        # engine_start, clutch, move_allowed
-uint8 CATEGORY_LIGHT=3        # lights, blinkers
-uint8 CATEGORY_SYSTEM=4       # source switch, reset, etc
+uint8 CATEGORY_STATE=1          # armed, engine, light
+uint8 CATEGORY_EVENT=2          # engine, clutch, brake, move_allowed
+uint8 CATEGORY_SIGNALIZATION=3  # lights, blinkers, horn
+uint8 CATEGORY_SYSTEM=4         # source switch, reset, etc
 
 # ---- EVENT TYPE (MEANING DEPENDS ON CATEGORY) ----
 uint8 type
 
 # STATE TYPES
 uint8 STATE_ARMED=1
-uint8 STATE_POWER=2
-uint8 STATE_LIGHT=3
+uint8 STATE_ENGINE=2
+uint8 STATE_SIGNALIZATION=3
 
 # EVENT TYPES
 uint8 ENGINE_START=10
@@ -38,16 +38,13 @@ uint8 FRONT_LONG=23
 uint8 BACK_POSITION=24
 uint8 LEFT_BLINK=25
 uint8 RIGHT_BLINK=26
+uint8 HORN=27
 
 # SYSTEM TYPES
 uint8 SYS_FORCE_SOURCE=40
 uint8 SYS_RESET=41
 
 # ---- VALUE ----
-# Meaning:
-# - toggle → 0/1
-# - force → 0/1
-# - analog (future) → scaled int
 int32 value
 
 # ---- TIMESTAMP ----

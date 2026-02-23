@@ -24,7 +24,7 @@ export function initUI() {
     safety: document.getElementById("safety"),
     states: document.getElementById("states"),
     events: document.getElementById("events"),
-    lights: document.getElementById("lights"),
+    signalization: document.getElementById("signalization"),
   };
 
   pageWeb  = document.getElementById("page-web");
@@ -127,14 +127,9 @@ export function updateState(name, value) {
   const meta = STATE_MAP[name];
   if (!meta) return;
 
-  // =========================
-  // FAILSAFE (APSOLUTNA ISTINA)
-  // =========================
   if (name === "FAILSAFE") {
     failsafeActive = value === "1";
 
-    // OFF -> zeleno
-    // ON  -> crveno
     btn.classList.remove("on", "off");
     btn.classList.add(failsafeActive ? "off" : "on");
 
@@ -158,7 +153,6 @@ function updateControlLock() {
     const meta = STATE_MAP[name];
     if (!meta) return;
 
-    // OVI SU UVIJEK AKTIVNI
     if (
       meta.group === "source" ||
       meta.group === "safety"
@@ -167,23 +161,11 @@ function updateControlLock() {
       return;
     }
 
-    // =========================
-    // FAILSAFE IMA PRIORITET
-    // =========================
     if (failsafeActive) {
       btn.classList.add("disabled");
       return;
     }
 
-    // =========================
-    // NORMALNA SOURCE LOGIKA
-    // =========================
-    //if (activeSource === "WEB") {
-    //  btn.classList.remove("disabled");
-    //}
-    //else {
-    //  btn.classList.add("disabled");
-    //}
   });
 }
 

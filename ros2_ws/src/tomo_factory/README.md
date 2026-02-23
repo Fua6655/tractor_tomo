@@ -36,4 +36,7 @@ Central logic and safety layer. Contains two cores:
 
 ## Notes
 - Active source (PS4/WEB/AUTO) decides which `ControlEvents` are accepted.
-- Emergency: HARD blocks all and forces blinkers; SOFT blocks dangerous events.
+- Emergency: HARD blocks all, forces blinkers, and turns horn ON.
+- Emergency release and HARD -> SOFT transition silence horn.
+- SOFT emergency blocks dangerous event category actions.
+- For WEB/AUTO event toggles, `ENGINE_START` and `ENGINE_STOP` are allowed only when engine state is ON.

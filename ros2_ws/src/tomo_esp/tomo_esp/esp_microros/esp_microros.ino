@@ -23,22 +23,25 @@ const uint16_t AGENT_PORT = 8888;
 // =====================================================
 // ================= GPIO ==============================
 // =====================================================
-const int ENGINE_START_PIN = 40;
-const int CLUTCH_PIN = 41;
-const int BRAKE_PIN = 42;
 
-const int FRONT_POSITION_PIN = 15;
-const int FRONT_SHORT_PIN = 16;
-const int FRONT_LONG_PIN = 17;
+// ----- 4 CHANNEL RELAY ----
+const int ENGINE_START_PIN = 36;
+const int CLUTCH_PIN = 37;
+const int BRAKE_PIN = 38;
 
-const int BACK_POSITION_PIN = 9;
-const int LEFT_BLINK_PIN = 10;
-const int RIGHT_BLINK_PIN = 11;
+// ---- 8 CHANNEL RELAY ----
+const int FRONT_POSITION_PIN = 9;
+const int FRONT_SHORT_PIN = 10;
+const int FRONT_LONG_PIN = 11;
+const int BACK_POSITION_PIN = 15;
+const int LEFT_BLINK_PIN = 16;
+const int RIGHT_BLINK_PIN = 17;
+const int HORN_PIN = 18;
 
 // ---- THROTTLE ----
-const int THR_EN = 4;   // PWM
-const int THR_IN1 = 5;
-const int THR_IN2 = 6;
+const int THR_EN = 5;   // PWM
+const int THR_IN1 = 6;
+const int THR_IN2 = 7;
 
 // ---- STEERING ----
 const int STR_EN = 12;   // PWM
@@ -115,6 +118,7 @@ void allOutputsLow() {
   digitalWrite(BACK_POSITION_PIN, LOW);
   digitalWrite(LEFT_BLINK_PIN, LOW);
   digitalWrite(RIGHT_BLINK_PIN, LOW);
+  digitalWrite(HORN_PIN, LOW);
 }
 
 void applyThrottle(float v) {
@@ -170,6 +174,7 @@ void output_cb(const void *msgin) {
   digitalWrite(BACK_POSITION_PIN, msg->back_position);
   digitalWrite(LEFT_BLINK_PIN, msg->left_blink);
   digitalWrite(RIGHT_BLINK_PIN, msg->right_blink);
+  digitalWrite(HORN_PIN, msg->horn);
 }
 
 void throttle_cb(const void *msgin) {
@@ -234,6 +239,7 @@ void setup() {
   pinMode(BACK_POSITION_PIN, OUTPUT);
   pinMode(LEFT_BLINK_PIN, OUTPUT);
   pinMode(RIGHT_BLINK_PIN, OUTPUT);
+  pinMode(HORN_PIN, OUTPUT);
 
   pinMode(THR_EN, OUTPUT);
   pinMode(THR_IN1, OUTPUT);

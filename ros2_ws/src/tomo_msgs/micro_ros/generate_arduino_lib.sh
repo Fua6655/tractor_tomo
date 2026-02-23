@@ -39,4 +39,11 @@ docker run -it --rm \
   --env MICROROS_LIBRARY_FOLDER=extras \
   "microros/micro_ros_static_library_builder:${DOCKER_TAG}"
 
+# Some Arduino ESP32-S3 toolchains look for src/esp32s3 while the generated
+# micro-ROS library provides src/esp32. Create a compatibility alias.
+if [[ -d "$MICRO_ROS_ARDUINO_DIR/src/esp32" && ! -e "$MICRO_ROS_ARDUINO_DIR/src/esp32s3" ]]; then
+  ln -s esp32 "$MICRO_ROS_ARDUINO_DIR/src/esp32s3"
+  echo "Created compatibility symlink: src/esp32s3 -> src/esp32"
+fi
+
 echo "Done. Restart Arduino IDE after generation."

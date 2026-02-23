@@ -16,12 +16,12 @@ class ArmState(Enum):
     ARMED = 1
 
 
-class PowerState(Enum):
+class EngineState(Enum):
     OFF = 0
     ON = 1
 
 
-class LightState(Enum):
+class SignalizationState(Enum):
     OFF = 0
     ON = 1
 
@@ -50,8 +50,8 @@ class ControlFactory(Node):
         self.active_source = ActiveSource.PS4
 
         self.arm_state = ArmState.DISARMED
-        self.power_state = PowerState.OFF
-        self.light_state = LightState.OFF
+        self.engine_state = EngineState.OFF
+        self.signalization_state = SignalizationState.OFF
 
         self.state = {
             "engine_start": False,
@@ -67,6 +67,7 @@ class ControlFactory(Node):
             "back_position": False,
             "left_blink": False,
             "right_blink": False,
+            "horn": False,
         }
 
         self.front_mode = 0  # 0=OFF, 1=SHORT, 2=LONG
@@ -84,8 +85,8 @@ class ControlFactory(Node):
 
         self.saved_state = None
         self.saved_arm = None
-        self.saved_power = None
-        self.saved_light = None
+        self.saved_engine = None
+        self.saved_signalization = None
         self.saved_front_mode = None
         self.saved_blink_l = None
         self.saved_blink_r = None
@@ -118,6 +119,7 @@ class ControlFactory(Node):
             self.arm_state = armed
             self.state["front_position"] = front_pos
             self.state["engine_stop"] = True
+            self.state["horn"] = True
 
             self.publish()
             return
@@ -126,10 +128,13 @@ class ControlFactory(Node):
         if msg.active and msg.level == Emergency.LEVEL_SOFT:
             self.get_logger().warn("⚠️ SOFT EMERGENCY")
 
+            if self.emergency_active and self.emergency_level == Emergency.LEVEL_HARD:
+                self.state["horn"] = False
+
             if not self.emergency_active:
                 self._save_soft_state()
+                self.emergency_active = True
 
-            self.emergency_active = True
             self.emergency_level = Emergency.LEVEL_SOFT
             self._set_blink_period(0.5)
 
@@ -138,8 +143,8 @@ class ControlFactory(Node):
             self.state["move_allowed"] = False
             self.state["clutch_active"] = False
             self.state["brake_active"] = False
-            self.power_state = PowerState.OFF
             self.state["engine_stop"] = False
+            self.state["horn"] = False
 
             self.publish()
             return
@@ -151,6 +156,7 @@ class ControlFactory(Node):
             # HARD emergency release → clear engine stop
             if self.emergency_level == Emergency.LEVEL_HARD:
                 self.state["engine_stop"] = False
+                self.state["horn"] = False
 
             if self.emergency_level == Emergency.LEVEL_SOFT:
                 self._restore_soft_state()
@@ -230,16 +236,16 @@ class ControlFactory(Node):
                         self._exit_armed()
                     return
 
-                if msg.type == ControlEvents.STATE_POWER:
+                if msg.type == ControlEvents.STATE_ENGINE:
                     if msg.value:
-                        self._enter_power()
+                        self._enter_engine()
                     else:
-                        self._exit_power()
+                        self._exit_engine()
                     return
 
-                if msg.type == ControlEvents.STATE_LIGHT:
-                    self.light_state = (
-                        LightState.ON if msg.value else LightState.OFF
+                if msg.type == ControlEvents.STATE_SIGNALIZATION:
+                    self.signalization_state = (
+                        SignalizationState.ON if msg.value else SignalizationState.OFF
                     )
                     return
 
@@ -255,23 +261,23 @@ class ControlFactory(Node):
                         self._exit_armed()
                     return
 
-                if msg.type == ControlEvents.STATE_POWER:
-                    if self.power_state == PowerState.OFF:
-                        self._enter_power()
+                if msg.type == ControlEvents.STATE_ENGINE:
+                    if self.engine_state == EngineState.OFF:
+                        self._enter_engine()
                     else:
-                        self._exit_power()
+                        self._exit_engine()
                     return
 
-                if msg.type == ControlEvents.STATE_LIGHT:
-                    self.light_state = (
-                        LightState.OFF
-                        if self.light_state == LightState.ON
-                        else LightState.ON
+                if msg.type == ControlEvents.STATE_SIGNALIZATION:
+                    self.signalization_state = (
+                        SignalizationState.OFF
+                        if self.signalization_state == SignalizationState.ON
+                        else SignalizationState.ON
                     )
                     return
 
         # BLOCK LIGHT COMMANDS
-        if msg.category == ControlEvents.CATEGORY_LIGHT and self.light_state != LightState.ON:
+        if msg.category == ControlEvents.CATEGORY_SIGNALIZATION and self.signalization_state != SignalizationState.ON:
             return
 
         # EVENTS
@@ -284,7 +290,7 @@ class ControlFactory(Node):
 
                 if msg.type == ControlEvents.ENGINE_START:
                     self.state["engine_start"] = (
-                            bool(msg.value) and self.power_state == PowerState.ON
+                            bool(msg.value) and self.engine_state == EngineState.ON
                     )
 
                 elif msg.type == ControlEvents.MOVE_ALLOWED:
@@ -302,10 +308,11 @@ class ControlFactory(Node):
             else:
 
                 if msg.type == ControlEvents.ENGINE_START:
-                    if self.power_state == PowerState.ON:
+                    if self.engine_state == EngineState.ON:
                         self.state["engine_start"] = not self.state["engine_start"]
 
                 elif msg.type == ControlEvents.ENGINE_STOP:
+                    if self.engine_state == EngineState.ON:
                         self.state["engine_stop"] = not self.state["engine_stop"]
 
                 elif msg.type == ControlEvents.MOVE_ALLOWED:
@@ -318,7 +325,7 @@ class ControlFactory(Node):
                     self.state["brake_active"] = not self.state["brake_active"]
 
         # LIGHTS
-        elif msg.category == ControlEvents.CATEGORY_LIGHT:
+        elif msg.category == ControlEvents.CATEGORY_SIGNALIZATION:
 
             # ==================================================
             # PS4 → SEQUENCE BASED
@@ -339,6 +346,9 @@ class ControlFactory(Node):
 
                 elif msg.type == ControlEvents.RIGHT_BLINK:
                     self.blink_right_active = not self.blink_right_active
+
+                elif msg.type == ControlEvents.HORN:
+                    self.state["horn"] = not self.state["horn"]
 
             # ==================================================
             # WEB / AUTO → DIRECT TOGGLE
@@ -364,6 +374,9 @@ class ControlFactory(Node):
                 elif msg.type == ControlEvents.RIGHT_BLINK:
                     self.blink_right_active = not self.blink_right_active
 
+                elif msg.type == ControlEvents.HORN:
+                    self.state["horn"] = not self.state["horn"]
+
     # ==================================================
     # FSM TRANSITIONS
     # ==================================================
@@ -378,14 +391,14 @@ class ControlFactory(Node):
         self.arm_state = ArmState.DISARMED
         self.state["engine_stop"] = True
 
-    def _enter_power(self):
-        if self.power_state == PowerState.ON:
+    def _enter_engine(self):
+        if self.engine_state == EngineState.ON:
             return
-        self.power_state = PowerState.ON
+        self.engine_state = EngineState.ON
         self.state["engine_start"] = False
 
-    def _exit_power(self):
-        self.power_state = PowerState.OFF
+    def _exit_engine(self):
+        self.engine_state = EngineState.OFF
         self.state["engine_start"] = False
 
     # ==================================================
@@ -418,8 +431,8 @@ class ControlFactory(Node):
     def _save_soft_state(self):
         self.saved_state = self.state.copy()
         self.saved_arm = self.arm_state
-        self.saved_power = self.power_state
-        self.saved_light = self.light_state
+        self.saved_engine = self.engine_state
+        self.saved_signalization = self.signalization_state
         self.saved_front_mode = self.front_mode
         self.saved_blink_l = self.blink_left_active
         self.saved_blink_r = self.blink_right_active
@@ -430,8 +443,8 @@ class ControlFactory(Node):
 
         self.state = self.saved_state
         self.arm_state = self.saved_arm
-        self.power_state = self.saved_power
-        self.light_state = self.saved_light
+        self.engine_state = self.saved_engine
+        self.signalization_state = self.saved_signalization
         self.front_mode = self.saved_front_mode
         self.blink_left_active = self.saved_blink_l
         self.blink_right_active = self.saved_blink_r
@@ -447,8 +460,8 @@ class ControlFactory(Node):
             self.state[k] = False
 
         self.front_mode = 0
-        self.power_state = PowerState.OFF
-        self.light_state = LightState.OFF
+        self.engine_state = EngineState.OFF
+        self.signalization_state = SignalizationState.OFF
         self.blink_left_active = False
         self.blink_right_active = False
 
@@ -463,8 +476,8 @@ class ControlFactory(Node):
 
         msg.emergency = self.emergency_active
         msg.armed_state = self.arm_state == ArmState.ARMED
-        msg.power_state = self.power_state == PowerState.ON
-        msg.light_state = self.light_state == LightState.ON
+        msg.engine_state = self.engine_state == EngineState.ON
+        msg.signalization_state = self.signalization_state == SignalizationState.ON
 
         msg.engine_start = self.state["engine_start"]
         msg.engine_stop = self.state["engine_stop"]
@@ -478,6 +491,7 @@ class ControlFactory(Node):
         msg.back_position = self.state["back_position"]
         msg.left_blink = self.state["left_blink"]
         msg.right_blink = self.state["right_blink"]
+        msg.horn = self.state["horn"]
 
         msg.stamp = self.get_clock().now().to_msg()
         self.pub_output.publish(msg)

@@ -15,20 +15,21 @@ PS4 input node. Converts joystick input into `ControlEvents` + `cmd_vel` and tri
 Holding buttons sends state toggles; taps/edges send events. Mapping matches `ps4_node.py`.
 
 - **X (hold)**: ARM toggle
-- **O (hold)**: POWER toggle
-- **Square (hold)**: LIGHT mode toggle
+- **O (hold)**: ENGINE toggle
+- **Square (hold)**: SIGNALIZATION mode toggle
 - **Triangle (hold)**: ENGINE_START (value = 1 while pressed)
 - **L1**: CLUTCH active (event category)
 - **R1**: BRAKE active (event category)
 - **L1 (hold)**: MOVE_ALLOWED toggle while held for `move_hold_time`
-- **D-pad** (only when LIGHT mode is ON):
+- **D-pad** (only when SIGNALIZATION mode is ON):
   - Up: FRONT_SEQUENCE_NEXT
   - Down: BACK_POSITION
   - Left: LEFT_BLINK
   - Right: RIGHT_BLINK
+- **Triangle (edge)**: HORN (only when SIGNALIZATION is ON and ENGINE is OFF)
 
 ## Parameters (selected)
-- `arm_hold_time`, `power_hold_time`, `light_hold_time`, `move_hold_time`
+- `arm_hold_time`, `engine_hold_time`, `signalization_hold_time`, `move_hold_time`
 - `joy_topic`, `control_event_topic`, `control_emergency_topic`, `cmd_topic`
 
 ## Launch

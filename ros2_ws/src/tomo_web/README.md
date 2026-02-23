@@ -29,3 +29,4 @@ Web UI + ROS bridge (FastAPI + WebSocket). Sends `ControlEvents` and displays sy
 ## Notes
 - `web_node` starts uvicorn on port `8000`.
 - Failsafe indicator is derived from `/tomo/esp_alive` watchdog.
+- UI state names follow current schema: `ENGINE`, `SIGNALIZATION`, and horn button `HO`.

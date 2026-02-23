@@ -27,8 +27,8 @@ window.sendEvent = function (meta, name) {
     type: "event",
     payload: {
       source: SOURCE.WEB,
-      category: meta.category, // dolazi iz STATE_MAP
-      type: meta.code,         // dolazi iz STATE_MAP
+      category: meta.category,
+      type: meta.code,
       value: 1
     }
   }));
@@ -81,8 +81,8 @@ ws.onmessage = (e) => {
 
     // ---- STATES ----
     updateState("ARMED", d.armed ? "1" : "0");
-    updateState("POWER", d.power ? "1" : "0");
-    updateState("LIGHT", d.light ? "1" : "0");
+    updateState("ENGINE", d.engine ? "1" : "0");
+    updateState("SIGNALIZATION", d.signalization ? "1" : "0");
 
     // ---- EVENTS ----
     updateState("ENGINE_START", d.engine_start ? "1" : "0");
@@ -91,13 +91,14 @@ ws.onmessage = (e) => {
     updateState("BRAKE", d.brake ? "1" : "0");
     updateState("MOVE", d.move ? "1" : "0");
 
-    // ---- LIGHTS ----
+    // ---- SIGNALIZATION ----
     updateState("FP", d.fp ? "1" : "0");
     updateState("FS", d.fs ? "1" : "0");
     updateState("FL", d.fl ? "1" : "0");
     updateState("BP", d.bp ? "1" : "0");
     updateState("LB", d.lb ? "1" : "0");
     updateState("RB", d.rb ? "1" : "0");
+    updateState("HO", d.ho ? "1" : "0");
   }
 
   if (msg.type === "esp_state") {

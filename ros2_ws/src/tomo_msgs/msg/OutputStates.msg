@@ -11,8 +11,8 @@ uint8 SOURCE_AUTO=3
 # ---- SYSTEM STATE ----
 bool emergency
 bool armed_state
-bool power_state
-bool light_state
+bool engine_state
+bool signalization_state
 
 # ---- EVENTS ----
 bool engine_start
@@ -28,5 +28,6 @@ bool front_long
 bool back_position
 bool left_blink
 bool right_blink
+bool horn
 
 builtin_interfaces/Time stamp

@@ -84,8 +84,8 @@ class WebRosBridge(Node):
                 'data': {
                     'source': msg.source,
                     'armed': msg.armed_state,
-                    'power': msg.power_state,
-                    'light': msg.light_state,
+                    'engine': msg.engine_state,
+                    'signalization': msg.signalization_state,
                     'engine_start': msg.engine_start,
                     'engine_stop': msg.engine_stop,
                     'clutch': msg.clutch_active,
@@ -97,6 +97,7 @@ class WebRosBridge(Node):
                     'bp': msg.back_position,
                     'lb': msg.left_blink,
                     'rb': msg.right_blink,
+                    'ho': msg.horn,
                 }
             }),
             self.loop
