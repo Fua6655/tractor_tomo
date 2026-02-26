@@ -11,7 +11,8 @@ Web UI + ROS bridge (FastAPI + WebSocket). Sends `ControlEvents` and displays sy
   - Sub: `/tomo/states` (tomo_msgs/OutputStates)
   - Sub: `/tomo/engine_cmd` (std_msgs/Float32)
   - Sub: `/tomo/steer_cmd` (std_msgs/Float32)
-  - Sub: `/tomo/esp_alive` (std_msgs/Bool)
+  - Sub: `/tomo/esp1_alive` (std_msgs/Bool)
+  - Sub: `/tomo/esp2_alive` (std_msgs/Bool)
 
 ## HTTP/WS
 - HTTP server: `http://localhost:8000/`
@@ -21,12 +22,13 @@ Web UI + ROS bridge (FastAPI + WebSocket). Sends `ControlEvents` and displays sy
 ## Parameters (selected)
 - `control_event_topic`, `control_emergency_topic`
 - `output_topic`, `engine_cmd_topic`, `steer_cmd_topic`
-- `esp_alive_topic`, `esp_alive_timeout`
+- `esp1_alive_topic`, `esp2_alive_topic`, `esp_alive_timeout`
 
 ## Launch
 - `ros2 launch tomo_web web.launch.py`
 
 ## Notes
 - `web_node` starts uvicorn on port `8000`.
-- Failsafe indicator is derived from `/tomo/esp_alive` watchdog.
+- Failsafe indicator is derived from combined `/tomo/esp1_alive` + `/tomo/esp2_alive` watchdog.
+- Safety panel includes extra `POWER FAILSAFE` emergency button (separate trigger from existing hard/soft emergency buttons).
 - UI state names follow current schema: `ENGINE`, `SIGNALIZATION`, and horn button `HO`.

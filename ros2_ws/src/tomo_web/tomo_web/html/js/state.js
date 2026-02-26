@@ -10,7 +10,10 @@ export const STATE_MAP = {
 
   // ---------- SAFETY ----------
   FAILSAFE:  { group: "safety", label: "Failsafe", type: "failsafe" },
+  FAILSAFE_ESP1:  { group: "safety", label: "ESP1 Failsafe", type: "failsafe_sub" },
+  FAILSAFE_ESP2:  { group: "safety", label: "ESP2 Failsafe", type: "failsafe_sub" },
   HARD_EMERGENCY:    { group: "safety", label: "HARD EMERGENCY", type: "emergency_hard" },
+  POWER_EMERGENCY:   { group: "safety", label: "POWER FAILSAFE", type: "emergency_power" },
   SOFT_EMERGENCY:    { group: "safety", label: "SOFT EMERGENCY", type: "emergency_soft" },
   RELEASE_EMERGENCY: { group: "safety", label: "Release EMERGENCY", type: "emergency_release" },
 
@@ -18,13 +21,13 @@ export const STATE_MAP = {
   ARMED: { group: "states", label: "Armed", category: CATEGORY.STATE, code: STATE.ARMED },
   ENGINE: { group: "states", label: "Engine", category: CATEGORY.STATE, code: STATE.ENGINE },
   SIGNALIZATION: { group: "states", label: "Signalization", category: CATEGORY.STATE, code: STATE.SIGNALIZATION },
+  MOVE: { group: "states", label: "Move Allowed", category: CATEGORY.STATE, code: STATE.MOVE_ALLOWED },
 
   // ---------- EVENTS ----------
   ENGINE_START: { group: "events", label: "Engine Start", category: CATEGORY.EVENT, code: EVENT.ENGINE_START },
   ENGINE_STOP:  { group: "events", label: "Engine Stop", category: CATEGORY.EVENT, code: EVENT.ENGINE_STOP },
   CLUTCH:       { group: "events", label: "Clutch Active", category: CATEGORY.EVENT, code: EVENT.CLUTCH_ACTIVE },
   BRAKE:        { group: "events", label: "Brake Active", category: CATEGORY.EVENT, code: EVENT.BRAKE_ACTIVE},
-  MOVE:         { group: "events", label: "Move Allowed", category: CATEGORY.EVENT, code: EVENT.MOVE_ALLOWED  },
 
   // ---------- SIGNALIZATION ----------
   FP: { group: "signalization", label: "Front Position", category: CATEGORY.SIGNALIZATION, code: SIGNALIZATION.FRONT_POSITION },

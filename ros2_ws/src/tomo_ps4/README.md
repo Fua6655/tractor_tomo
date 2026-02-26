@@ -20,7 +20,7 @@ Holding buttons sends state toggles; taps/edges send events. Mapping matches `ps
 - **Triangle (hold)**: ENGINE_START (value = 1 while pressed)
 - **L1**: CLUTCH active (event category)
 - **R1**: BRAKE active (event category)
-- **L1 (hold)**: MOVE_ALLOWED toggle while held for `move_hold_time`
+- **L1 (hold)**: MOVE_ALLOWED state control while held for `move_hold_time`
 - **D-pad** (only when SIGNALIZATION mode is ON):
   - Up: FRONT_SEQUENCE_NEXT
   - Down: BACK_POSITION

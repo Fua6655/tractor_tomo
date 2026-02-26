@@ -28,7 +28,8 @@ class WebRosBridge(Node):
         self.declare_parameter("output_topic", "/tomo/states")
         self.declare_parameter("engine_cmd_topic", "/tomo/engine_cmd")
         self.declare_parameter("steer_cmd_topic", "/tomo/steer_cmd")
-        self.declare_parameter("esp_alive_topic", "/tomo/esp_alive")
+        self.declare_parameter("esp1_alive_topic", "/tomo/esp1_alive")
+        self.declare_parameter("esp2_alive_topic", "/tomo/esp2_alive")
         self.declare_parameter("esp_alive_timeout", 1.5)
 
         self.control_event_topic = str(self.get_parameter('control_event_topic').value)
@@ -36,11 +37,15 @@ class WebRosBridge(Node):
         self.output_topic = str(self.get_parameter('output_topic').value)
         self.engine_cmd_topic = str(self.get_parameter('engine_cmd_topic').value)
         self.steer_cmd_topic = str(self.get_parameter('steer_cmd_topic').value)
-        self.esp_alive_topic = str(self.get_parameter("esp_alive_topic").value)
+        self.esp1_alive_topic = str(self.get_parameter("esp1_alive_topic").value)
+        self.esp2_alive_topic = str(self.get_parameter("esp2_alive_topic").value)
         self.esp_alive_timeout = float(self.get_parameter("esp_alive_timeout").value)
 
         self.loop = loop
-        self.last_esp_alive = 0.0
+        self.last_esp1_alive = 0.0
+        self.last_esp2_alive = 0.0
+        self.esp1_failsafe = None
+        self.esp2_failsafe = None
         self.esp_failsafe = None
 
         # -------- PUBLISHERS --------
@@ -53,7 +58,8 @@ class WebRosBridge(Node):
         self.create_subscription(Float32, self.steer_cmd_topic, self.steer_cmd_cb, 20)
 
         esp_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
-        self.create_subscription(Bool, self.esp_alive_topic, self.esp_alive_cb, esp_qos)
+        self.create_subscription(Bool, self.esp1_alive_topic, self.esp1_alive_cb, esp_qos)
+        self.create_subscription(Bool, self.esp2_alive_topic, self.esp2_alive_cb, esp_qos)
 
         self.create_timer(0.5, self.esp_alive_watchdog)
 
@@ -123,14 +129,44 @@ class WebRosBridge(Node):
             self.loop
         )
 
-    def esp_alive_cb(self, msg: Bool):
+    def esp1_alive_cb(self, msg: Bool):
         if msg.data:
-            self.last_esp_alive = time.time()
+            self.last_esp1_alive = time.time()
+
+    def esp2_alive_cb(self, msg: Bool):
+        if msg.data:
+            self.last_esp2_alive = time.time()
 
     def esp_alive_watchdog(self):
         now = time.time()
-        alive = (now - self.last_esp_alive) <= self.esp_alive_timeout
-        failsafe = not alive
+        esp1_alive = (now - self.last_esp1_alive) <= self.esp_alive_timeout
+        esp2_alive = (now - self.last_esp2_alive) <= self.esp_alive_timeout
+        esp1_failsafe = not esp1_alive
+        esp2_failsafe = not esp2_alive
+        failsafe = esp1_failsafe or esp2_failsafe
+
+        if self.esp1_failsafe is None or esp1_failsafe != self.esp1_failsafe:
+            self.esp1_failsafe = esp1_failsafe
+            asyncio.run_coroutine_threadsafe(
+                broadcast({
+                    "type": "esp_state",
+                    "name": "FAILSAFE_ESP1",
+                    "value": "1" if esp1_failsafe else "0",
+                }),
+                self.loop
+            )
+
+        if self.esp2_failsafe is None or esp2_failsafe != self.esp2_failsafe:
+            self.esp2_failsafe = esp2_failsafe
+            asyncio.run_coroutine_threadsafe(
+                broadcast({
+                    "type": "esp_state",
+                    "name": "FAILSAFE_ESP2",
+                    "value": "1" if esp2_failsafe else "0",
+                }),
+                self.loop
+            )
+
         if self.esp_failsafe is not None and failsafe == self.esp_failsafe:
             return
         self.esp_failsafe = failsafe
@@ -178,7 +214,7 @@ async def websocket_endpoint(ws: WebSocket):
                 ros_node.send_emergency(
                     data['active'],
                     data.get('level', 1),
-                    'web'
+                    data.get('reason', 'web')
                 )
 
     except WebSocketDisconnect:

@@ -192,15 +192,15 @@ class PS4Node(Node):
         if self.hold("MOVE", self.ps4.L1_btn, self.move_hold, now):
             self.send_if_changed(
                 "MOVE_ALLOWED",
-                ControlEvents.CATEGORY_EVENT,
-                ControlEvents.MOVE_ALLOWED,
+                ControlEvents.CATEGORY_STATE,
+                ControlEvents.STATE_MOVE_ALLOWED,
                 int(self.ps4.L1_btn),
             )
         if not self.ps4.L1_btn:
             self.send_if_changed(
                 "MOVE_ALLOWED",
-                ControlEvents.CATEGORY_EVENT,
-                ControlEvents.MOVE_ALLOWED,
+                ControlEvents.CATEGORY_STATE,
+                ControlEvents.STATE_MOVE_ALLOWED,
                 int(self.ps4.L1_btn),
             )
 

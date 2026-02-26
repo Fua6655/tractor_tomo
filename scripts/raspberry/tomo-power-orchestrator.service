@@ -1,0 +1,21 @@
+[Unit]
+Description=TOMO Raspberry Power Orchestrator
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=tomo
+WorkingDirectory=/home/tomo/tractor_tomo
+Environment=PYTHONUNBUFFERED=1
+Environment=TOMO_REPO_DIR=/home/tomo/tractor_tomo
+Environment=POWER_MANAGER_HOST=192.168.0.185
+Environment=POWER_MANAGER_PORT=5005
+Environment=POWER_MANAGER_LOCAL_PORT=5006
+Environment=ORCH_EXEC_SHUTDOWN=1
+ExecStart=/home/tomo/tractor_tomo/scripts/raspberry/run_power_orchestrator.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

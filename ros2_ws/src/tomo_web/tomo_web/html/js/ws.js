@@ -41,7 +41,8 @@ window.sendEmergency = function (payload) {
   ws.send(JSON.stringify({
     type: "emergency",
     active: payload.active,
-    level: payload.level
+    level: payload.level,
+    reason: payload.reason || "web"
   }));
 };
 

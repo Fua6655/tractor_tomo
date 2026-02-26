@@ -35,3 +35,12 @@ Notes
   `tomo_msgs`. You then use that regenerated library in Arduino IDE.
 - If your `micro_ros_arduino` path is different, set
   `MICRO_ROS_ARDUINO_DIR` before running.
+
+ESP32-S3 compatibility (manual fallback)
+----------------------------------------
+If your toolchain still cannot find `esp32s3` after generation, run:
+
+```bash
+cd "$MICRO_ROS_ARDUINO_DIR/src"
+ln -s esp32 esp32s3
+```

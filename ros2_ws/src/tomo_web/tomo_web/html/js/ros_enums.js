@@ -20,6 +20,7 @@ export const STATE = {
   ARMED: 1,
   ENGINE: 2,
   SIGNALIZATION: 3,
+  MOVE_ALLOWED: 4,
 };
 
 // ---------- EVENT ----------
@@ -28,7 +29,6 @@ export const EVENT = {
   ENGINE_STOP: 11,
   CLUTCH_ACTIVE: 12,
   BRAKE_ACTIVE: 13,
-  MOVE_ALLOWED: 14,
 };
 
 // ---------- SIGNALIZATION ----------

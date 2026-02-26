@@ -56,6 +56,10 @@ function getButton(name, meta) {
     btn.style.background = "#ef6c00";
     btn.style.color = "black";
   }
+  if (meta.type === "emergency_power") {
+    btn.style.background = "#6a1b9a";
+    btn.style.color = "white";
+  }
   if (meta.type === "emergency_release") {
     btn.style.background = "#2e7d32";
     btn.style.color = "white";
@@ -63,7 +67,7 @@ function getButton(name, meta) {
 
   btn.onclick = () => {
 
-    if (meta.type === "failsafe") return;
+    if (meta.type === "failsafe" || meta.type === "failsafe_sub") return;
 
     if (meta.type === "emergency_hard") {
       window.sendEmergency({ active: true, level: 1 });
@@ -72,6 +76,11 @@ function getButton(name, meta) {
 
     if (meta.type === "emergency_soft") {
       window.sendEmergency({ active: true, level: 0 });
+      return;
+    }
+
+    if (meta.type === "emergency_power") {
+      window.sendEmergency({ active: true, level: 1, reason: "web_power_failsafe" });
       return;
     }
 
@@ -134,6 +143,12 @@ export function updateState(name, value) {
     btn.classList.add(failsafeActive ? "off" : "on");
 
     updateControlLock();
+    return;
+  }
+
+  if (name === "FAILSAFE_ESP1" || name === "FAILSAFE_ESP2") {
+    btn.classList.remove("on", "off");
+    btn.classList.add(value === "1" ? "off" : "on");
     return;
   }
 

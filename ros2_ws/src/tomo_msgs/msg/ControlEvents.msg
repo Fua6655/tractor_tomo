@@ -11,7 +11,7 @@ uint8 SOURCE_AUTO=3
 # ---- EVENT CATEGORY ----
 uint8 category
 uint8 CATEGORY_STATE=1          # armed, engine, light
-uint8 CATEGORY_EVENT=2          # engine, clutch, brake, move_allowed
+uint8 CATEGORY_EVENT=2          # engine start/stop, clutch, brake
 uint8 CATEGORY_SIGNALIZATION=3  # lights, blinkers, horn
 uint8 CATEGORY_SYSTEM=4         # source switch, reset, etc
 
@@ -22,13 +22,13 @@ uint8 type
 uint8 STATE_ARMED=1
 uint8 STATE_ENGINE=2
 uint8 STATE_SIGNALIZATION=3
+uint8 STATE_MOVE_ALLOWED=4
 
 # EVENT TYPES
 uint8 ENGINE_START=10
 uint8 ENGINE_STOP=11
 uint8 CLUTCH_ACTIVE=12
 uint8 BRAKE_ACTIVE=13
-uint8 MOVE_ALLOWED=14
 
 # LIGHT TYPES
 uint8 FRONT_POSITION=20

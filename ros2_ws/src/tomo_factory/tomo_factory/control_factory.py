@@ -200,6 +200,11 @@ class ControlFactory(Node):
         if self.emergency_active and self.emergency_level == Emergency.LEVEL_SOFT:
             if msg.category == ControlEvents.CATEGORY_EVENT:
                 return
+            if (
+                msg.category == ControlEvents.CATEGORY_STATE and
+                msg.type == ControlEvents.STATE_MOVE_ALLOWED
+            ):
+                return
 
         self.reduce(msg)
         self.publish()
@@ -249,6 +254,10 @@ class ControlFactory(Node):
                     )
                     return
 
+                if msg.type == ControlEvents.STATE_MOVE_ALLOWED:
+                    self.state["move_allowed"] = bool(msg.value)
+                    return
+
             # ==================================================
             # WEB / AUTO → TOGGLE BASED
             # ==================================================
@@ -276,6 +285,10 @@ class ControlFactory(Node):
                     )
                     return
 
+                if msg.type == ControlEvents.STATE_MOVE_ALLOWED:
+                    self.state["move_allowed"] = not self.state["move_allowed"]
+                    return
+
         # BLOCK LIGHT COMMANDS
         if msg.category == ControlEvents.CATEGORY_SIGNALIZATION and self.signalization_state != SignalizationState.ON:
             return
@@ -292,9 +305,6 @@ class ControlFactory(Node):
                     self.state["engine_start"] = (
                             bool(msg.value) and self.engine_state == EngineState.ON
                     )
-
-                elif msg.type == ControlEvents.MOVE_ALLOWED:
-                    self.state["move_allowed"] = bool(msg.value)
 
                 elif msg.type == ControlEvents.CLUTCH_ACTIVE:
                     self.state["clutch_active"] = bool(msg.value)
@@ -314,9 +324,6 @@ class ControlFactory(Node):
                 elif msg.type == ControlEvents.ENGINE_STOP:
                     if self.engine_state == EngineState.ON:
                         self.state["engine_stop"] = not self.state["engine_stop"]
-
-                elif msg.type == ControlEvents.MOVE_ALLOWED:
-                    self.state["move_allowed"] = not self.state["move_allowed"]
 
                 elif msg.type == ControlEvents.CLUTCH_ACTIVE:
                     self.state["clutch_active"] = not self.state["clutch_active"]
