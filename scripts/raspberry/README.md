@@ -32,6 +32,9 @@ Ovaj direktorij sadrzi skripte za Raspberry Pi koji nakon boot-a:
 3. Workspace build-an:
    - `cd ~/tractor_tomo/ros2_ws && colcon build --symlink-install`
 4. Docker instaliran (micro-ROS agent koristi Docker image).
+5. Python paketi za web node:
+   - `fastapi`
+   - `uvicorn`
 
 Ako Docker nije instaliran, instaliraj ga:
 
@@ -45,6 +48,38 @@ docker run --rm hello-world
 ```
 
 Ako `newgrp docker` ne osvjezi sesiju kako treba, odjavi se i ponovno prijavi na Raspberry.
+
+Ako FastAPI/Uvicorn nisu instalirani, instaliraj ih:
+
+```bash
+sudo apt update
+sudo apt install -y python3-fastapi python3-uvicorn
+```
+
+Ako paket nije dostupan preko `apt`, koristi:
+
+```bash
+python3 -m pip install --user fastapi uvicorn
+```
+
+## Bonus: full install (Docker + FastAPI)
+
+Za cisti Raspberry (copy/paste):
+
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker tomo
+newgrp docker
+docker --version
+
+sudo apt update
+sudo apt install -y python3-fastapi python3-uvicorn || true
+python3 -m pip install --user fastapi uvicorn
+
+docker run --rm hello-world
+python3 -c "import fastapi, uvicorn; print('fastapi+uvicorn OK')"
+```
 
 ## Konfiguracija
 
@@ -106,6 +141,13 @@ Status:
 
 ```bash
 systemctl status tomo-power-orchestrator.service
+```
+
+Debug restart podsjetnik:
+
+```bash
+sudo systemctl restart tomo-power-orchestrator.service
+journalctl -u tomo-power-orchestrator.service -n 120 --no-pager
 ```
 
 ## Ocekivano ponasanje LED/FSM
